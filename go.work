@@ -1,0 +1,9 @@
+// go.work
+go 1.25.4
+
+use (
+	./apps/telemetry/grpc-parser
+	./apps/telemetry/mqtt-to-grpc
+	./apps/telemetry/post-to-grpc
+	./packages/proto
+)

@@ -1,3 +1,56 @@
+## Telemetry
+
+server:
+
+```bash
+go run apps/telemetry/grpc-parser/main.go
+```
+
+clients:
+
+```bash
+go run apps/telemetry/mqtt-to-grpc/main.go
+```
+
+```bash
+go run apps/telemetry/post-to-grpc/main.go
+```
+
+.proto:
+
+```bash
+protoc \
+  --proto_path=packages/proto \
+  --go_out=packages/proto/gen/go \
+  --go-grpc_out=packages/proto/gen/go \
+  --go_opt=paths=source_relative \
+  --go-grpc_opt=paths=source_relative \
+  telemetry/v1/telemetry.proto
+```
+
+## ks3000
+
+### instant
+
+```json
+[
+  {
+    "variable": "data",
+    "time": "2025-12-09 21:40:50",
+    "metadata": {
+      "U0": 212.13,
+      "I0": 1.22,
+      "F1": 60.0,
+      "P0": 448.53,
+      "Q0": -3.33,
+      "S0": 448.54,
+      "FP0": 1.0,
+      "CE": 0
+    }
+  }
+]
+```
+
 # Turborepo Design System Starter
 
 This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
