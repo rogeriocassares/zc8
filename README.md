@@ -28,6 +28,19 @@ protoc \
   telemetry/v1/telemetry.proto
 ```
 
+## devices
+
+019b08df-26e7-7506-a5f6-916b2bef24f4 -> ks3000 -> 2491028
+019b08df-26e7-71b5-8df6-56c2e954ac91 -> ks3000 -> 2515111
+019b08df-26e7-7119-97da-523f9236db80 -> ks3000 -> 2515112
+019b08df-26e7-7f7b-a18f-b3d6c3fdf248 -> ks3000 -> 2515113
+019b08df-26e7-7866-a0fb-1768122b8584 -> ks3000 -> 2515114
+
+MQTT Topics:
+device/UUIDV7/telemetry
+device/UUIDV7/event
+device/UUIDV7/command
+
 ## ks3000
 
 ### instant

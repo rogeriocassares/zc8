@@ -138,7 +138,7 @@ func initMQTTClient(mqttChan chan<- MQTTMessage) MQTT.Client {
 	mqttBroker := "tcp://mqtt.maua.br:1883"
 
 	clientID := fmt.Sprintf("parse-lns-sub-%s", id)
-	topic := "smartcampusmaua/+/+/+/+/+/+/+"
+	topic := "device/+/telemetry"
 
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(mqttBroker)
