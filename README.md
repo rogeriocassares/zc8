@@ -1,5 +1,130 @@
 ## Telemetry
 
+MQTT Entry:
+Topic: device/uuidv7/telemetry/v1
+
+HTTP Post Entry:
+URL: http://localhost/api/telemetry/v1
+
+GRPC Client:
+.proto:
+message Telemetry {
+string version = 1;
+string deviceid = 2;
+string payload = 3;
+}
+
+GRPC Server:
+
+MQTT/HTTP Entry Points (thin clients)
+↓ (forward raw data + deviceId)
+gRPC Server (core logic)
+↓
+
+1. Authenticate/validate deviceId
+2. Fetch device-specific parsing rules (by deviceModel)
+3. Parse according to device config
+4. Write to Redis streams
+
+Detailing:
+
+1. MQTT/HTTP receives data
+   - Minimal validation (is it valid JSON/binary?)
+   - Extract deviceId
+2. Send to gRPC server:
+
+   - deviceId
+   - raw payload
+   - metadata (timestamp, source)
+
+3. gRPC server:
+   - Authenticate: "Does this deviceId exist and is it active?"
+   - Authorize: "Is this organization allowed to write?"
+   - Fetch parsing config for this deviceId
+   - Parse/decode according to device-specific rules
+   - Write to Redis (potentially to org-specific streams)
+
+REDIS:
+
+```bash
+# Store device info in Redis
+redis-cli SET "device:abc123" '{
+  "is_active": true,
+  "is_authorized": true,
+  "org_id": "org_xyz",
+  "parse_config": {
+    "type": "json",
+    "schema": {}
+  }
+}'
+```
+
+```go
+// AspectMidia
+case "am19_sl": smartlight
+case "am19_pc": counter
+case "am19_mf": milkfat
+case "am19_ed": energymeter
+case "am19_gps": gps
+case "am19_gp": gaugepressure
+case "am19_hyd": hydrometer
+case "am19_sm3dl": soilmoisture3depthlevels
+case "am19_t8p": temperature8Point
+case "am19_va": vibrationAverage
+case "am19_udl": waterTankLevel
+
+// Milesight
+case "am103":
+case "ds3604":
+case "ws101":
+case "ws101_r":
+case "ws156":
+case "ws202":
+case "ws301":
+case "ws302":
+case "ws501_w12_us":
+case "ws513_eu":
+case "ws523_eu":
+case "ws558_ln":
+case "ws558_switch":
+case "wt201_hvac":
+case "em300_th":
+case "em300_di":
+case "em300_mcs":
+case "em300_sld":
+case "ct101":
+case "ct303":
+case "em320_th":
+case "em400_tld":
+case "em400_mud":
+case "em400_udl_c100":
+case "em410_rdl":
+case "em500_swl_l005":
+case "em500_swl_l010":
+case "uc100_rs485":
+case "at101":
+case "uc300":
+case "uc501":
+case "uc511":
+case "ex_301":
+
+
+// Khomp
+case "nit_2xli":
+case "nit_21lv": ems-104 WeatherStation
+case "dtl500":
+case "dtl200_l005":
+case "dtl200_ad":
+
+// SagaMedicao
+case "hid_ss":
+
+// Kron
+case "ks3000_wifi":
+case "ks3000_lora":
+
+```
+
 server:
 
 ```bash

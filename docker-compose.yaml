@@ -1,0 +1,18 @@
+services:
+  # grpc-server:
+  #   build: .
+  #   ports:
+  #     - "50051:50051"
+  #   environment:
+  #     - SERVER_HOST=0.0.0.0
+  #     - SERVER_PORT=50051
+  #     - REDIS_ADDR=redis:6379
+  #     - REDIS_PASSWORD=your_password
+  #     - REDIS_DB=0
+  #   depends_on:
+  #     - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

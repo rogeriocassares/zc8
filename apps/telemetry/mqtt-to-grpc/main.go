@@ -34,21 +34,13 @@ var (
 )
 
 type MQTTMessage struct {
-	Topic        string
-	Payload      string
-	Organization string
-	DeviceType   string
-	Measurement  string
-	DeviceId     string
-	DeviceModel  string
-	Direction    string
-	Etc          string
-	Zc8Instance  string
+	Topic   string
+	Payload []byte
 }
 
 type GrpcClient struct {
 	conn   *grpc.ClientConn
-	client pb.GreeterClient
+	client pb.TelemetryServiceClient
 	mu     sync.Mutex
 }
 
@@ -66,19 +58,19 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Init uinique gRPC (reusable)
+	// Init unique gRPC (reusable)
 	grpcClient, err := initGrpcClient(*addr)
 	if err != nil {
 		log.Fatalf("Failed to initialize gRPC client: %v", err)
 	}
 	defer grpcClient.Close()
 
-	mqttChan := make(chan MQTTMessage, channelBufferSize)
+	mqttChan := make(chan *pb.IngestTelemetryRequest, channelBufferSize)
 
 	mqttClient := initMQTTClient(mqttChan)
 	defer mqttClient.Disconnect(250)
 
-	// Wait Group to Manage GoROutines
+	// Wait Group to Manage GoRoutines
 	var wg sync.WaitGroup
 
 	// Goroutine 1: MQTT Subscriber (callback)
@@ -89,7 +81,7 @@ func main() {
 		wg.Add(1)
 		go grpcWorker(ctx, &wg, i, mqttChan, grpcClient)
 	}
-	log.Println("All workers started. System is running. Press CTRL+C to stop.") // ← NOVO
+	log.Println("All workers started. System is running. Press CTRL+C to stop.")
 
 	<-sigChan
 	log.Println("Shutdown signal received, closing gracefully...")
@@ -102,14 +94,14 @@ func main() {
 }
 
 func initGrpcClient(addr string) (*GrpcClient, error) {
-	// Configurar keep-alive para conexão persistente
+	// Configure keep-alive for persistent connection
 	kaParams := keepalive.ClientParameters{
 		Time:                10 * time.Second,
 		Timeout:             3 * time.Second,
 		PermitWithoutStream: true,
 	}
 
-	conn, err := grpc.NewClient(
+	conn, err := grpc.Dial(
 		addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithKeepaliveParams(kaParams),
@@ -118,7 +110,7 @@ func initGrpcClient(addr string) (*GrpcClient, error) {
 		return nil, fmt.Errorf("failed to connect to gRPC server: %w", err)
 	}
 
-	client := pb.NewGreeterClient(conn)
+	client := pb.NewTelemetryServiceClient(conn)
 	log.Printf("Connected to gRPC server at %s\n", addr)
 
 	return &GrpcClient{
@@ -133,7 +125,7 @@ func (gc *GrpcClient) Close() {
 	}
 }
 
-func initMQTTClient(mqttChan chan<- MQTTMessage) MQTT.Client {
+func initMQTTClient(mqttChan chan<- *pb.IngestTelemetryRequest) MQTT.Client {
 	id := uuid.New().String()
 	mqttBroker := "tcp://mqtt.maua.br:1883"
 
@@ -157,7 +149,7 @@ func initMQTTClient(mqttChan chan<- MQTTMessage) MQTT.Client {
 
 	// Message handler sends messages to channel
 	opts.SetDefaultPublishHandler(func(client MQTT.Client, msg MQTT.Message) {
-		mqttMsg := parseMQTTMessage(msg.Topic(), string(msg.Payload()))
+		mqttMsg := parseMQTTMessage(msg.Topic(), msg.Payload())
 		select {
 		case mqttChan <- mqttMsg:
 			// Successfully sent to channel
@@ -179,56 +171,46 @@ func initMQTTClient(mqttChan chan<- MQTTMessage) MQTT.Client {
 	return client
 }
 
-func parseMQTTMessage(topic, payload string) MQTTMessage {
+func parseMQTTMessage(topic string, payload []byte) *pb.IngestTelemetryRequest {
 	parts := strings.Split(topic, "/")
-	msg := MQTTMessage{
-		Topic:   topic,
-		Payload: payload,
+	var deviceId string
+	if len(parts) > 1 {
+		deviceId = parts[1]
 	}
-
-	// Parse topic structure: smartcampusmaua/organization/deviceType/deviceModel/measurement/deviceID/direction/protocol
-	if len(parts) >= 7 {
-		msg.Zc8Instance = parts[0]
-		msg.Organization = parts[1]
-		msg.DeviceType = parts[2]
-		msg.DeviceModel = parts[3]
-		msg.Measurement = parts[4]
-		msg.DeviceId = parts[5]
-		msg.Direction = parts[6]
-		msg.Etc = parts[7]
+	itr := &pb.IngestTelemetryRequest{
+		DeviceId: deviceId,
+		Data:     payload,
 	}
-
-	return msg
+	return itr
 }
 
-func grpcWorker(ctx context.Context, wg *sync.WaitGroup, workerID int, mqttChan <-chan MQTTMessage, grpcClient *GrpcClient) {
+func grpcWorker(ctx context.Context, wg *sync.WaitGroup, workerID int, mqttChan <-chan *pb.IngestTelemetryRequest, grpcClient *GrpcClient) {
 	defer wg.Done()
-	log.Printf("gRPC Worker %d started and waiting for messages...", workerID) // ← MELHORADO
+	log.Printf("gRPC Worker %d started and waiting for messages...", workerID)
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("gRPC Worker %d shutting down (context cancelled)", workerID) // ← MAIS ESPECÍFICO
+			log.Printf("gRPC Worker %d shutting down (context cancelled)", workerID)
 			return
 		case msg, ok := <-mqttChan:
 			if !ok {
-				log.Printf("gRPC Worker %d: channel closed, exiting", workerID) // ← MAIS ESPECÍFICO
+				log.Printf("gRPC Worker %d: channel closed, exiting", workerID)
 				return
 			}
-			log.Printf("gRPC Worker %d: received message from topic %s", workerID, msg.Topic) // ← NOVO
-
+			log.Printf("gRPC Worker %d: received message from deviceId %s", workerID, msg.DeviceId)
 			processMessage(ctx, workerID, msg, grpcClient)
 		}
 	}
 }
 
-func processMessage(ctx context.Context, workerID int, msg MQTTMessage, grpcClient *GrpcClient) {
+func processMessage(ctx context.Context, workerID int, msg *pb.IngestTelemetryRequest, grpcClient *GrpcClient) {
 	// Retry logic
 	var err error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		err = sendToGrpc(ctx, msg, grpcClient)
 		if err == nil {
-			log.Printf("Worker %d: Successfully sent message from %s", workerID, msg.Organization)
+			log.Printf("Worker %d: Successfully sent message from %s", workerID, msg.DeviceId)
 			return
 		}
 
@@ -238,11 +220,11 @@ func processMessage(ctx context.Context, workerID int, msg MQTTMessage, grpcClie
 		}
 	}
 
-	log.Printf("Worker %d: Failed to send message after %d attempts. Topic: %s, Error: %v",
-		workerID, maxRetries, msg.Topic, err)
+	log.Printf("Worker %d: Failed to send message after %d attempts. DeviceId: %s, Error: %v",
+		workerID, maxRetries, msg.DeviceId, err)
 }
 
-func sendToGrpc(ctx context.Context, msg MQTTMessage, grpcClient *GrpcClient) error {
+func sendToGrpc(ctx context.Context, msg *pb.IngestTelemetryRequest, grpcClient *GrpcClient) error {
 	grpcCtx, cancel := context.WithTimeout(ctx, grpcTimeout)
 	defer cancel()
 
@@ -251,22 +233,15 @@ func sendToGrpc(ctx context.Context, msg MQTTMessage, grpcClient *GrpcClient) er
 	client := grpcClient.client
 	grpcClient.mu.Unlock()
 
-	response, err := client.SendMessageToServer(grpcCtx, &pb.HelloRequest{
-		Zc8Instance:  msg.Zc8Instance,
-		Organization: msg.Organization,
-		DeviceType:   msg.DeviceType,
-		DeviceModel:  msg.DeviceModel,
-		Measurement:  msg.Measurement,
-		DeviceId:     msg.DeviceId,
-		Direction:    msg.Direction,
-		Etc:          msg.Etc,
-		Payload:      msg.Payload,
+	response, err := client.IngestTelemetry(grpcCtx, &pb.IngestTelemetryRequest{
+		DeviceId: msg.DeviceId,
+		Data:     msg.Data,
 	})
 
 	if err != nil {
 		return fmt.Errorf("gRPC call failed: %w", err)
 	}
 
-	log.Printf("gRPC Response: %s (from topic: %s)", response.GetMessage(), msg.Topic)
+	log.Printf("gRPC Response: %v", response.GetSuccess())
 	return nil
 }

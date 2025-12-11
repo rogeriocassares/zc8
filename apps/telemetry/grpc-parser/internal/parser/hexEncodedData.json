@@ -1,0 +1,12 @@
+{
+  "type": "hex",
+  "schema": {
+    "fields": [
+      {
+        "name": "sensor_value",
+        "type": "uint32",
+        "endian": "little"
+      }
+    ]
+  }
+}

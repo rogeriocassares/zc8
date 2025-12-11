@@ -1,52 +1,81 @@
-// // packages/proto/telemetry/v1/telemetry.proto
-// syntax = "proto3";
-// package telemetry.v1;
-// option go_package =
-// "github.com/rogeriocassares/zc8/packages/proto/gen/go/telemetry/v1"; service
-// TelemetryService {
-//   rpc SendData(SendDataRequest) returns (SendDataResponse);
-// }
-// message SendDataRequest { bytes payload = 1; }
-// message SendDataResponse { bool success = 1; }
-
-// Copyright 2015 gRPC authors.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 syntax = "proto3";
 
 option go_package = "github.com/rogeriocassares/zc8/packages/proto/telemetry/v1";
 
 package zc8_telemetry_proto_v1;
 
-// The greeting service definition.
-service Greeter {
-  // Sends a greeting
-  rpc SendMessageToServer(HelloRequest) returns (HelloReply) {}
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+service TelemetryService {
+  rpc IngestTelemetry(IngestTelemetryRequest) returns (IngestTelemetryResponse);
+  rpc StreamTelemetry(stream IngestTelemetryRequest)
+      returns (IngestTelemetryResponse);
 }
 
-// The request message containing the user's name.
-message HelloRequest {
-  string Zc8Instance = 1;
-  string Organization = 2;
-  string DeviceType = 3;
-  string DeviceModel = 4;
-  string Measurement = 5;
-  string DeviceId = 6;
-  string Direction = 7;
-  string Etc = 8;
-  string Payload = 9;
+service CommandService {
+  rpc SendCommand(SendCommandRequest) returns (SendCommandResponse);
+  rpc AcknowledgeCommand(AcknowledgeCommandRequest)
+      returns (AcknowledgeCommandResponse);
 }
 
-// The response message containing the greetings
-message HelloReply { string message = 1; }
+message IngestTelemetryRequest {
+  string device_id = 1;
+  // google.protobuf.Any data = 2;
+  bytes data = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+message IngestTelemetryResponse {
+  bool success = 1;
+  string message_id = 2;
+  string error = 3;
+}
+
+message SendCommandRequest {
+  string device_id = 1;
+  google.protobuf.Any command_data = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+message SendCommandResponse {
+  bool success = 1;
+  string command_id = 2;
+  string error = 3;
+}
+
+message AcknowledgeCommandRequest {
+  string command_id = 1;
+  string device_id = 2;
+  google.protobuf.Timestamp received_at = 3;
+}
+
+message AcknowledgeCommandResponse {
+  bool success = 1;
+  string message = 2;
+}
+// Breakdown of the Example
+// The provided .proto file defines two gRPC services for sensor communication:
+// TelemetryService (data from sensors) and CommandService (data to sensors),
+// following protocol buffer best practices.//
+
+// TelemetryService
+// GetSensorData: Unary RPC to request sensor readings.
+// Request: GetSensorDataRequest (sensor ID and optional timestamp).
+// Response: GetSensorDataResponse (list of SensorReading and status).
+// StreamTelemetry: Server-streaming RPC for continuous telemetry.
+// Request: StreamTelemetryRequest (sensor ID).
+// Response: Stream of TelemetryData messages.
+// CommandService
+// SendCommand: Unary RPC to send a command to a sensor.
+// Request: SendCommandRequest (command type, parameters, target).
+// Response: SendCommandResponse (success flag, message, command ID).
+// AcknowledgeCommand: RPC to confirm command receipt.
+// Request: AcknowledgeCommandRequest (command ID).
+// Response: google.protobuf.Empty (no content).
+// Message Design
+// All messages use CamelCase.
+// Fields use lower_snake_case.
+// Reusable types like SensorReading and TelemetryData encapsulate structured
+// data. Using google.protobuf.Empty allows future expansion (e.g., adding
+// metadata)
