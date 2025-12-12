@@ -1,0 +1,19 @@
+import type { Metadata } from 'next';
+import './globals.css';
+
+export const metadata: Metadata = {
+  title: 'Turborepo + Elysia + Eden',
+  description: 'Type-safe fullstack app with Next.js and ElysiaJS',
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+
+    { children }
+
+  );
+}

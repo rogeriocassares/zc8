@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@repo/ui": "workspace:*",
+    "@repo/eden": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "next": "16.0.6",
     "react": "19.2.0",

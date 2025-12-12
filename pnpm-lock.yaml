@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@elysiajs/cors':
+        specifier: ^1.4.0
+        version: 1.4.0(elysia@1.4.17(@sinclair/typebox@0.34.41)(exact-mirror@0.2.5(@sinclair/typebox@0.34.41))(file-type@21.1.1)(openapi-types@12.1.3)(typescript@5.9.2))
       '@elysiajs/eden':
         specifier: ^1.4.5
         version: 1.4.5(elysia@1.4.17(@sinclair/typebox@0.34.41)(exact-mirror@0.2.5(@sinclair/typebox@0.34.41))(file-type@21.1.1)(openapi-types@12.1.3)(typescript@5.9.2))
@@ -215,6 +218,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@repo/eden':
+        specifier: workspace:*
+        version: link:../../packages/eden
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
@@ -258,7 +264,7 @@ importers:
 
   packages/eden:
     dependencies:
-      core:
+      '@repo/core':
         specifier: workspace:*
         version: link:../../apps/core
 
@@ -922,6 +928,11 @@ packages:
   '@egjs/hammerjs@2.0.17':
     resolution: {integrity: sha512-XQsZgjm2EcVUiZQf11UBJQfmZeEmOW8DpI1gsFeln6w0ae0ii4dMQEQ0kjl6DspdWX1aGY1/loyXnP0JS06e/A==}
     engines: {node: '>=0.8.0'}
+
+  '@elysiajs/cors@1.4.0':
+    resolution: {integrity: sha512-pb0SCzBfFbFSYA/U40HHO7R+YrcXBJXOWgL20eSViK33ol1e20ru2/KUaZYo5IMUn63yaTJI/bQERuQ+77ND8g==}
+    peerDependencies:
+      elysia: '>= 1.4.0'
 
   '@elysiajs/eden@1.4.5':
     resolution: {integrity: sha512-hIOeH+S5NU/84A7+t8yB1JjxqjmzRkBF9fnLn6y+AH8EcF39KumOAnciMhIOkhhThVZvXZ3d+GsizRc+Fxoi8g==}
@@ -6878,6 +6889,10 @@ snapshots:
   '@egjs/hammerjs@2.0.17':
     dependencies:
       '@types/hammerjs': 2.0.46
+
+  '@elysiajs/cors@1.4.0(elysia@1.4.17(@sinclair/typebox@0.34.41)(exact-mirror@0.2.5(@sinclair/typebox@0.34.41))(file-type@21.1.1)(openapi-types@12.1.3)(typescript@5.9.2))':
+    dependencies:
+      elysia: 1.4.17(@sinclair/typebox@0.34.41)(exact-mirror@0.2.5(@sinclair/typebox@0.34.41))(file-type@21.1.1)(openapi-types@12.1.3)(typescript@5.9.2)
 
   '@elysiajs/eden@1.4.5(elysia@1.4.17(@sinclair/typebox@0.34.41)(exact-mirror@0.2.5(@sinclair/typebox@0.34.41))(file-type@21.1.1)(openapi-types@12.1.3)(typescript@5.9.2))':
     dependencies:
