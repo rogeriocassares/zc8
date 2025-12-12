@@ -9,7 +9,7 @@ import (
 
 // ParseConfig defines how to parse device data
 type ParseConfig struct {
-	Type   string          `json:"type"`   // "json", "binary", "hex", "protobuf"
+	Type   string          `json:"type"`   // "json", "binary", "hex", "array", "protobuf"
 	Schema json.RawMessage `json:"schema"` // Device-specific schema
 }
 
@@ -31,7 +31,7 @@ func New() *Parser {
 }
 
 // Parse takes raw payload and config, returns structured data
-func (p *Parser) Parse(rawPayload []byte, config ParseConfig) (map[string]interface{}, error) {
+func (p *Parser) Parse(rawPayload []byte, config ParseConfig) (interface{}, error) {
 	switch config.Type {
 	case "json":
 		return p.parseJSON(rawPayload)
@@ -51,13 +51,15 @@ func (p *Parser) Parse(rawPayload []byte, config ParseConfig) (map[string]interf
 }
 
 // parseJSON parses JSON payload
-func (p *Parser) parseJSON(rawPayload []byte) (map[string]interface{}, error) {
-	var result map[string]interface{}
+func (p *Parser) parseJSON(rawPayload []byte) (interface{}, error) {
+	var result interface{}
 
 	if err := json.Unmarshal(rawPayload, &result); err != nil {
 		return nil, fmt.Errorf("json parse error: %w", err)
 	}
 
+	fmt.Printf("\n PARSE JSON RESULT: %v", result)
+	// [map[metadata:map[CE:0 F1:59.94 FP0:0 I0:0 P0:0 Q0:0 S0:0 U0:221.25] time:2025-12-12 13:34:00 variable:data]]
 	return result, nil
 }
 

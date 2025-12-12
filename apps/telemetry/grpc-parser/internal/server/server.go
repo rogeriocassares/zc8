@@ -95,7 +95,7 @@ func (s *Server) getDeviceInfo(ctx context.Context, deviceID string) (*DeviceInf
 	return &deviceInfo, nil
 }
 
-func (s *Server) writeToStream(ctx context.Context, streamKey, deviceID string, data map[string]interface{}) error {
+func (s *Server) writeToStream(ctx context.Context, streamKey, deviceID string, data interface{}) error {
 	dataJSON, _ := json.Marshal(data)
 
 	_, err := s.redis.XAdd(ctx, &redis.XAddArgs{
@@ -106,6 +106,8 @@ func (s *Server) writeToStream(ctx context.Context, streamKey, deviceID string, 
 			"data":      string(dataJSON),
 		},
 	}).Result()
+
+	fmt.Printf("Message wrote to redis: %v", dataJSON)
 
 	return err
 }

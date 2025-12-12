@@ -41,6 +41,7 @@ Detailing:
    - Authenticate: "Does this deviceId exist and is it active?"
    - Authorize: "Is this organization allowed to write?"
    - Fetch parsing config for this deviceId
+     ===> Get Struct from protobuf and scale offset from redis
    - Parse/decode according to device-specific rules
    - Write to Redis (potentially to org-specific streams)
 
