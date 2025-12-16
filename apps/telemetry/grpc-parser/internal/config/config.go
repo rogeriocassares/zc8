@@ -10,13 +10,21 @@ import (
 )
 
 type Config struct {
-	Server ServerConfig
-	Redis  RedisConfig
+	Server    ServerConfig
+	Redis     RedisConfig
+	Influxdb3 Influxdb3Config
 }
 
 type ServerConfig struct {
 	Host string
 	Port string
+}
+
+type Influxdb3Config struct {
+	Host     string
+	Port     string
+	Token    string
+	Database string
 }
 
 type RedisConfig struct {
@@ -51,6 +59,12 @@ func Load() *Config {
 			DialTimeout:  getEnvAsDuration("REDIS_DIAL_TIMEOUT", 5*time.Second),
 			ReadTimeout:  getEnvAsDuration("REDIS_READ_TIMEOUT", 3*time.Second),
 			WriteTimeout: getEnvAsDuration("REDIS_WRITE_TIMEOUT", 3*time.Second),
+		},
+		Influxdb3: Influxdb3Config{
+			Host:     getEnv("INFLUXDB3_HOST", "localhost"),
+			Port:     getEnv("INFLUXDB3_PORT", "8181"),
+			Token:    getEnv("INFLUXDB3_TOKEN", "0.0.0.0"),
+			Database: getEnv("INFLUXDB3_DATABASE", "iot_rp40d"),
 		},
 	}
 }

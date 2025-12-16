@@ -14,6 +14,7 @@ import (
 	// "time"
 
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/config"
+	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/influxdb3"
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/redis"
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/server"
 	pb "github.com/rogeriocassares/zc8/packages/proto/gen/go/telemetry/v1"
@@ -618,6 +619,10 @@ func main() {
 	redisClient := redis.NewClient(&cfg.Redis)
 	defer redisClient.Close()
 
+	// initialize Influxdb
+	influxdb3Client := influxdb3.NewClient(&cfg.Influxdb3)
+	defer influxdb3Client.Close()
+
 	// Create gRPC server
 	addr := cfg.Server.Host + ":" + cfg.Server.Port
 	lis, err := net.Listen("tcp", addr)
@@ -626,7 +631,7 @@ func main() {
 	}
 
 	s := grpc.NewServer()
-	pb.RegisterTelemetryServiceServer(s, server.New(redisClient))
+	pb.RegisterTelemetryServiceServer(s, server.New(redisClient, influxdb3Client))
 
 	log.Printf("server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {

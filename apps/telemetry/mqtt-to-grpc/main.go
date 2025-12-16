@@ -101,7 +101,7 @@ func initGrpcClient(addr string) (*GrpcClient, error) {
 		PermitWithoutStream: true,
 	}
 
-	conn, err := grpc.Dial(
+	conn, err := grpc.NewClient(
 		addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithKeepaliveParams(kaParams),
