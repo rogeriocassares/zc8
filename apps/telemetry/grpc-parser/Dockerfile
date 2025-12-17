@@ -1,4 +1,4 @@
-ARG  BUILDER_IMAGE=golang:1.23.1-alpine3.20
+ARG  BUILDER_IMAGE=golang:1.25.5-alpine3.23
 ############################
 # STEP 1 build executable binary
 ############################
