@@ -31,7 +31,7 @@ COPY . .
 RUN go mod tidy
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /go/bin/grpc-parser .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /go/bin/grpc-parser ./cmd
 
 ############################
 # STEP 2 build a small image
