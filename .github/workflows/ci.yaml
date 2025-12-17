@@ -1,14 +1,23 @@
-name: grpc-parser-workflow
+name: zc8-workflow
 on:
   push:
     branches:
       - develop
     paths:
       - "apps/telemetry/grpc-parser/**"
+      - "apps/telemetry/mqtt-to-grpc/**"
+
 jobs:
-  check-application:
-    name: build-job
+  build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: grpc-parser
+            context: apps/telemetry/grpc-parser
+          - name: mqtt-to-grpc
+            context: apps/telemetry/mqtt-to-grpc
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,10 +33,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push ${{ matrix.service.name }}
         uses: docker/build-push-action@v5
         with:
-          context: apps/telemetry/grpc-parser
-          file: apps/telemetry/grpc-parser/Dockerfile
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.context }}/Dockerfile
           push: true
-          tags: rogeriocassares/zc8-grpc-parser:0.1
+          tags: rogeriocassares/zc8-${{ matrix.service.name }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
