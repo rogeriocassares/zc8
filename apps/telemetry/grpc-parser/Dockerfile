@@ -23,7 +23,7 @@ RUN adduser \
   --uid "${UID}" \
   "${USER}"
 
-WORKDIR $GOPATH/src/github.com/OpenDataTelemetry/mqtt-topic-rewrite-lns-imt/
+WORKDIR $GOPATH/src/github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/
 COPY . .
 
 # Fetch dependencies.
