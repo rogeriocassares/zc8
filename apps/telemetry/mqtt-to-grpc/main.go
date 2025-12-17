@@ -29,7 +29,7 @@ const (
 )
 
 var (
-	addr = flag.String("addr", "localhost:50054", "the address to connect to")
+	addr = flag.String("addr", "grpc-parser-service:50054", "the address to connect to")
 	name = flag.String("name", defaultName, "Name to greet")
 )
 
