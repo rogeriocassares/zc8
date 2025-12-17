@@ -27,7 +27,8 @@ WORKDIR $GOPATH/src/github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/
 COPY . .
 
 # Fetch dependencies.
-RUN go get -v
+# RUN go get -v
+RUN go mod tidy
 
 # Build the binary
 RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
