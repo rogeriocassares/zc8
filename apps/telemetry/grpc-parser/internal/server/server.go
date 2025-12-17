@@ -127,7 +127,7 @@ func (s *Server) writeToStream(ctx context.Context, streamKey, deviceId string, 
 		},
 	}).Result()
 
-	fmt.Printf("Message wrote to redis: %v", dataJSON)
+	fmt.Printf("\nMessage wrote to redis: %v\n", dataJSON)
 
 	return err
 }
@@ -141,7 +141,8 @@ func (s *Server) writeToInfluxdb3(ctx context.Context, influxdb3Client, deviceId
 		panic(err)
 	}
 
-	fmt.Printf("Message wrote to redis: %v", dataInflux)
+	fmt.Printf("\nMessage wrote to influxdb3: %v", dataInflux)
+	fmt.Printf("\n--------------------------------------\n\n")
 
 	return err
 }

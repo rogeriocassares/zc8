@@ -99,7 +99,7 @@ func MarshalToInflux(msg ParsedData) string {
 	sb.WriteString(" ")
 	sb.WriteString(strconv.FormatUint(uint64(msg.Timestamp), 10))
 
-	fmt.Printf("===========> MarshalToInflux: %S", string(sb.String()))
+	fmt.Printf("MarshalToInflux: %s", sb.String())
 	return string(sb.String())
 }
 
@@ -230,10 +230,14 @@ func (p *Parser) parseJSON(data []byte, deviceModel string) (*ParsedData, error)
 			if err := json.Unmarshal(data, &ks3000_stats); err != nil {
 				return nil, err
 			}
+			var sbMsg strings.Builder
+			// sbMsg.WriteString(`'`)
+			sbMsg.WriteString(ks3000_stats.Msg)
+			// sbMsg.WriteString(`'`)
 			return &ParsedData{
 				Name: "ks3000_stats",
 				Fields: map[string]interface{}{
-					"msg": ks3000_stats.Msg,
+					"msg": sbMsg.String(),
 				},
 				Tags: map[string]interface{}{
 					"deviceId": ks3000_stats.Id,
