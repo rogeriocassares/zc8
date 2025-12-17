@@ -48,7 +48,7 @@ func Load() *Config {
 	return &Config{
 		Server: ServerConfig{
 			Host: getEnv("SERVER_HOST", "0.0.0.0"),
-			Port: getEnv("SERVER_PORT", "50051"),
+			Port: getEnv("SERVER_PORT", "50054"),
 		},
 		Redis: RedisConfig{
 			Addr:         getEnv("REDIS_ADDR", "localhost:6379"),
