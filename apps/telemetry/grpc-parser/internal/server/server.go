@@ -2,11 +2,8 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"time"
 
-	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -18,14 +15,15 @@ import (
 
 type Server struct {
 	pb.UnimplementedTelemetryServiceServer
-	redis     *redis.Client
+	// redis     *redis.Client
 	influxdb3 *influxdb3.Client
 	parser    *parser.Parser
 }
 
-func New(redisClient *redis.Client, influxdb3Client *influxdb3.Client) *Server {
+// func New(redisClient *redis.Client, influxdb3Client *influxdb3.Client) *Server {
+func New(influxdb3Client *influxdb3.Client) *Server {
 	return &Server{
-		redis:     redisClient,
+		// redis:     redisClient,
 		parser:    parser.New(),
 		influxdb3: influxdb3Client,
 	}
@@ -71,21 +69,16 @@ func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequ
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("parse failed: %v", err))
 	}
 
-	// parsedData.Fields = map[string]interface{}{
-	// 	"raw_data": in.Data}
 	parsedData.Tags = map[string]interface{}{
 		"deviceId": in.DeviceId}
-	// "variable": ks3000_metadata[0].Variable,
-	// parsedData.Tags = in.DeviceId
 
 	// Write to Redis Stream
 	streamKey := fmt.Sprintf("stream:{%s}:data", deviceInfo.OrgID)
-	if err := s.writeToStream(ctx, streamKey, in.DeviceId, *parsedData); err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to write: %v", err))
-	}
+	// if err := s.writeToStream(ctx, streamKey, in.DeviceId, *parsedData); err != nil {
+	// 	return nil, status.Error(codes.Internal, fmt.Sprintf("failed to write: %v", err))
+	// }
 
 	// Write to Influxdb3
-	// streamKey := fmt.Sprintf("stream:{%s}:data", deviceInfo.OrgID)
 	if err := s.writeToInfluxdb3(ctx, streamKey, in.DeviceId, *parsedData); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to write: %v", err))
 	}
@@ -97,40 +90,40 @@ func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequ
 	}, nil
 }
 
-func (s *Server) getDeviceInfo(ctx context.Context, deviceId string) (*DeviceInfo, error) {
-	key := fmt.Sprintf("device:%s", deviceId)
-	data, err := s.redis.Get(ctx, key).Result()
-	if err == redis.Nil {
-		return nil, fmt.Errorf("device not found")
-	} else if err != nil {
-		return nil, err
-	}
+// func (s *Server) getDeviceInfo(ctx context.Context, deviceId string) (*DeviceInfo, error) {
+// 	key := fmt.Sprintf("device:%s", deviceId)
+// 	data, err := s.redis.Get(ctx, key).Result()
+// 	if err == redis.Nil {
+// 		return nil, fmt.Errorf("device not found")
+// 	} else if err != nil {
+// 		return nil, err
+// 	}
 
-	var deviceInfo DeviceInfo
-	if err := json.Unmarshal([]byte(data), &deviceInfo); err != nil {
-		return nil, err
-	}
+// 	var deviceInfo DeviceInfo
+// 	if err := json.Unmarshal([]byte(data), &deviceInfo); err != nil {
+// 		return nil, err
+// 	}
 
-	return &deviceInfo, nil
-}
+// 	return &deviceInfo, nil
+// }
 
-func (s *Server) writeToStream(ctx context.Context, streamKey, deviceId string, data parser.ParsedData) error {
-	// dataJSON, _ := json.Marshal(data)
-	dataJSON := parser.MarshalToJson(data)
+// func (s *Server) writeToStream(ctx context.Context, streamKey, deviceId string, data parser.ParsedData) error {
+// 	// dataJSON, _ := json.Marshal(data)
+// 	dataJSON := parser.MarshalToJson(data)
 
-	_, err := s.redis.XAdd(ctx, &redis.XAddArgs{
-		Stream: streamKey,
-		Values: map[string]interface{}{
-			"device_id": deviceId,
-			"timestamp": time.Now().Unix(),
-			"data":      string(dataJSON),
-		},
-	}).Result()
+// 	_, err := s.redis.XAdd(ctx, &redis.XAddArgs{
+// 		Stream: streamKey,
+// 		Values: map[string]interface{}{
+// 			"device_id": deviceId,
+// 			"timestamp": time.Now().Unix(),
+// 			"data":      string(dataJSON),
+// 		},
+// 	}).Result()
 
-	fmt.Printf("\nMessage wrote to redis: %v\n", dataJSON)
+// 	fmt.Printf("\nMessage wrote to redis: %v\n", dataJSON)
 
-	return err
-}
+// 	return err
+// }
 
 func (s *Server) writeToInfluxdb3(ctx context.Context, influxdb3Client, deviceId string, data parser.ParsedData) error {
 	dataInflux := parser.MarshalToInflux(data)
