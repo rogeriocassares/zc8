@@ -1,20 +1,13 @@
-module github.com/rogeriocassares/zc8/apps/telemetry/mqtt-to-grpc
+module github.com/rogeriocassares/zc8/apps/telemetry/agent-to-grpc
 
 go 1.25.5
 
 require (
-	github.com/google/uuid v1.6.0
 	github.com/rogeriocassares/zc8/packages/proto v0.0.0-20251217223456-fbc10b61b6c1
 	google.golang.org/grpc v1.77.0
 )
 
 require (
-	github.com/gorilla/websocket v1.5.3 // indirect
-	golang.org/x/sync v0.17.0 // indirect
-)
-
-require (
-	github.com/eclipse/paho.mqtt.golang v1.5.1
 	golang.org/x/net v0.46.1-0.20251013234738-63d1a5100f82 // indirect
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.30.0 // indirect

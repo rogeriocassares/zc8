@@ -2,7 +2,10 @@ module github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser
 
 go 1.25.5
 
-require google.golang.org/grpc v1.77.0
+require (
+	github.com/rogeriocassares/zc8/packages/proto v0.0.0-20251217223456-fbc10b61b6c1
+	google.golang.org/grpc v1.77.0
+)
 
 require (
 	github.com/apache/arrow-go/v18 v18.4.1 // indirect
@@ -14,6 +17,7 @@ require (
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/mod v0.28.0 // indirect
@@ -25,7 +29,6 @@ require (
 
 require (
 	github.com/InfluxCommunity/influxdb3-go/v2 v2.11.0
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.17.2
 	golang.org/x/net v0.46.1-0.20251013234738-63d1a5100f82 // indirect

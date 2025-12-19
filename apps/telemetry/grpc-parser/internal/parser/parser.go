@@ -37,8 +37,11 @@ type KS3000_Metadata_IM struct {
 	F1  float64 `json:"F1"`
 	P0  float64 `json:"P0"`
 	Q0  float64 `json:"Q0"`
-	S0  float64 `json:"S0"`
 	FP0 float64 `json:"FP0"`
+	EA  float64 `json:"EA"`
+	ER  float64 `json:"ER"`
+	EAN float64 `json:"EAN"`
+	ERN float64 `json:"ERN"`
 	CE  float64 `json:"CE"`
 }
 
@@ -215,8 +218,11 @@ func (p *Parser) parseJSON(data []byte, deviceModel string) (*ParsedData, error)
 					"f1":         im.F1,
 					"p0":         im.P0,
 					"q0":         im.Q0,
-					"s0":         im.S0,
 					"fp0":        im.FP0,
+					"ea":         im.EA,
+					"er":         im.ER,
+					"ean":        im.EAN,
+					"ern":        im.ERN,
 					"ce":         im.CE,
 					"created_at": uint64(time.Now().UnixNano()),
 					// "raw_data":   sbRawData.String(),
