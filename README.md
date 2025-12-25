@@ -190,6 +190,20 @@ device/UUIDV7/command
 ]
 ```
 
+"u_ll_avg": im.U0,
+"i_avg": im.I0,
+"frequency": im.F1,
+"p_total": im.P0,
+"q_total": im.Q0,
+"power_factor": im.FP0,
+"a_plus": im.EA,
+"q_plus": im.ER,
+"a_minus": im.EAN,
+"q_minus": im.ERN,
+"error_code": im.CE,
+
+SELECT "deviceId", u_ll_avg as "Tensão (V)", a_plus as "Energia Ativa Positiva", q_plus as "Energia Reativa Positiva", a_minus as"Energia Ativa Negativa", q_minus as "Energia Reativa Negativa", q_total as "Potência Reativa (VAr)", p_total as "Potência Ativa (W)", i_avg as "Corrente (A)", power_factor as "Fator de Potência", frequency as "Frequência (Hz)", error_code as "Código de Erro", time FROM ks3000_im WHERE "deviceId" IN ('019b08df-26e7-7506-a5f6-916b2bef24f4') AND time >= now() - interval '7 days'
+
 # Turborepo Design System Starter
 
 This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
