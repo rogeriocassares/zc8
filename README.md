@@ -1,3 +1,14 @@
+```bash
+go run apps/telemetry/grpc-parser/cmd/server/main.go
+
+go run apps/telemetry/agent-to-grpc/main.go
+
+cd apps/core && bun dev
+
+cd apps/web && pnpm dev
+
+```
+
 ## Telemetry
 
 MQTT Entry:
@@ -32,7 +43,6 @@ Detailing:
    - Minimal validation (is it valid JSON/binary?)
    - Extract deviceId
 2. Send to gRPC server:
-
    - deviceId
    - raw payload
    - metadata (timestamp, source)

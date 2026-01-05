@@ -136,7 +136,10 @@ func (p *Parser) Parse(data []byte, config ParseConfig) (*ParsedData, error) {
 
 	switch config.Type {
 	case "json":
-		return p.parseJSON(data, "ks3000_wifi")
+		return p.parseJSON(data, config.Model)
+
+	case "log":
+		return p.parseLog(data, config.Model)
 
 	// case "binary":
 	// 	return p.parseBinary(data, config.Schema)
@@ -254,6 +257,79 @@ func (p *Parser) parseJSON(data []byte, deviceModel string) (*ParsedData, error)
 	case "healthpack":
 		return nil, nil
 	case "iotyre":
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unsupported device model: %s", deviceModel)
+	}
+	// return nil, nil
+
+	// // Check for 'variable' field to determine type
+	// if _, hasVar := objMap["variable"]; hasVar {
+	// 	// First format: data with metadata
+	// 	json.Unmarshal(objMap["variable"], &p.)
+	// 	json.Unmarshal(objMap["time"], &p.Time)
+	// 	json.Unmarshal(objMap["metadata"], &p.Metadata)
+	// } else if _, hasParam := objMap["param"]; hasParam {
+	// 	// Second format: log message
+	// 	json.Unmarshal(objMap["param"], &p.Param)
+	// 	json.Unmarshal(objMap["id"], &p.ID)
+	// 	json.Unmarshal(objMap["msg"], &p.Msg)
+	// 	// Time not present in this format
+	// }
+	// return nil, nil
+
+	// switch deviceType {
+	// case "ks3000":
+	// 	// [map[metadata:map[CE:0 F1:59.94 FP0:0 I0:0 P0:0 Q0:0 S0:0 U0:221.25] time:2025-12-12 13:34:00 variable:data]]
+
+	// 	if err := json.Unmarshal(data, &telemetry); err != nil {
+	// 		return nil, fmt.Errorf("json parse error: %w", err)
+	// 	}
+
+	// }
+
+	// result := &ParsedData{
+	// 	Name: "ks3000_im",
+	// 	Fields: map[string]interface{}{
+	// 		"F1":  ks3000_im.F1,
+	// 		"FP0": ks3000_im.FP0,
+	// 		"I0":  ks3000_im.I0,
+	// 		"P0":  ks3000_im.P0,
+	// 		"Q0":  ks3000_im.Q0,
+	// 		"S0":  ks3000_im.S0,
+	// 		"U0":  ks3000_im.U0,
+	// 	},
+	// 	Tags: map[string]interface{}{
+	// 		"deviceType": deviceType,
+	// 	}, Timestamp: 11234567890,
+	// }
+	// fmt.Printf("\n /////////////TELEMETRY: %v\n", telemetry.Telemetry)
+
+	// fmt.Printf("\n PARSE JSON RESULT: %v", result)
+	// return result, nil
+}
+
+func (p *Parser) parseLog(data []byte, deviceModel string) (*ParsedData, error) {
+
+	switch deviceModel {
+	case "ping":
+		// result := string(data)
+		var sbLogData strings.Builder
+		sbLogData.WriteString(`"`)
+		sbLogData.WriteString(string(data))
+		sbLogData.WriteString(`"`)
+		fmt.Printf("\nPing Received: %v\n", sbLogData.String())
+		return &ParsedData{
+			Name: "ping",
+			Fields: map[string]interface{}{
+				"log": sbLogData.String(),
+				// "created_at": uint64(time.Now().UnixNano()),
+				// "raw_data":   sbRawData.String(),
+			},
+			Tags: map[string]interface{}{
+					// "variable": ks3000_metadata[0].Variable,
+			}, Timestamp: uint64(time.Now().UnixNano()),
+		}, nil
 		return nil, nil
 	default:
 		return nil, fmt.Errorf("unsupported device model: %s", deviceModel)
