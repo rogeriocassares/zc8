@@ -6,6 +6,7 @@ on:
     paths:
       - "apps/telemetry/grpc-parser/**"
       - "apps/telemetry/mqtt-to-grpc/**"
+      - "apps/telemetry/chirpstackv4-rw-topic/**"
 
 jobs:
   build:
@@ -17,6 +18,8 @@ jobs:
             context: apps/telemetry/grpc-parser
           - name: mqtt-to-grpc
             context: apps/telemetry/mqtt-to-grpc
+          - name: chirpstackv4-rw-topic
+            context: apps/telemetry/chirpstackv4-rw-topic
 
     steps:
       - uses: actions/checkout@v4
