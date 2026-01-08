@@ -66,6 +66,21 @@ func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequ
 		deviceInfo.ParseConfig.Model = "ks3000_wifi"
 		deviceInfo.ParseConfig.Type = "json"
 
+	case "24e124133f315508":
+		deviceInfo.ParseConfig.Model = "em300-di"
+		deviceInfo.ParseConfig.Type = "binary" // or chirpstackv4 or lns
+		in.DeviceId = "019b9ade-55a0-746e-8d41-b2537631441c"
+
+	case "24e124126d284622":
+		deviceInfo.ParseConfig.Model = "em500-swl"
+		deviceInfo.ParseConfig.Type = "binary" // or chirpstackv4  or lns
+		in.DeviceId = "019b9ae2-fc84-7396-9ea8-fd2a041b7664"
+
+	case "24e124535f318437":
+		deviceInfo.ParseConfig.Model = "ws101"
+		deviceInfo.ParseConfig.Type = "binary" // or chirpstackv4  or lns
+		in.DeviceId = "019b9ae3-337e-7fa0-9b72-3861f0e6c6bd"
+
 	}
 
 	if err != nil {

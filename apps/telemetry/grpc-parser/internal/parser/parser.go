@@ -9,6 +9,13 @@ import (
 	"time"
 )
 
+type WS101 struct {
+	deviceStatus float64
+	resetEvent   float64
+	status       string
+	battery      float64
+}
+
 type ParsedData struct {
 	Name      string                 `json:"name"`
 	Fields    map[string]interface{} `json:"fields"`
@@ -141,8 +148,8 @@ func (p *Parser) Parse(data []byte, config ParseConfig) (*ParsedData, error) {
 	case "log":
 		return p.parseLog(data, config.Model)
 
-	// case "binary":
-	// 	return p.parseBinary(data, config.Schema)
+	case "binary":
+		return p.parseBinary(data, config.Model)
 
 	// case "hex":
 	// 	return p.parseHex(data, config.Schema)
@@ -384,7 +391,40 @@ func (p *Parser) parseLog(data []byte, deviceModel string) (*ParsedData, error) 
 
 // parseBinary parses binary data according to schema
 // func (p *Parser) parseBinary(data []byte, schema json.RawMessage) (map[string]interface{}, error) {
-// 	// Parse schema to understand binary format
+func (p *Parser) parseBinary(data []byte, deviceModel string) (*ParsedData, error) {
+	// Parse schema to understand binary format
+
+	switch deviceModel {
+	case "ws101":
+		// ff0bffff0101ff086535f3184376ff090110ff0a0105ff0f00
+		// 017564 --> ID: 01 | TYPE: 75 | DATA: 64 | Battery
+		// ff2e01 --> ID: ff | TYPE: 2e	| DATA: 01 | Status
+		fmt.Printf("\n WS101 Raw Data: %v\n", data)
+		data := []byte("017564")
+
+		// TODO: Create a parser for WS101 device
+		parseWs101Data, err := p.parseWs101Data(data)
+		if err != nil {
+			return nil, err
+		}
+		ws101 := *parseWs101Data
+		// result := string(data)
+		return &ParsedData{
+			Name:   "ws101",
+			Fields: map[string]interface{}{
+
+				// "raw_data":   sbRawData.String(),
+			},
+			Tags: map[string]interface{}{
+					// "variable": ks3000_metadata[0].Variable,
+			}, Timestamp: uint64(time.Now().UnixNano()),
+		}, nil
+		// return nil, nil
+	default:
+		return nil, fmt.Errorf("unsupported device model: %s", deviceModel)
+	}
+}
+
 // 	var binarySchema BinarySchema
 // 	if err := json.Unmarshal(schema, &binarySchema); err != nil {
 // 		return nil, fmt.Errorf("invalid binary schema: %w", err)
@@ -537,3 +577,27 @@ func (p *Parser) parseLog(data []byte, deviceModel string) (*ParsedData, error) 
 // 		return fmt.Errorf("unsupported parse type: %s", config.Type)
 // 	}
 // }
+
+type DecodedPayload struct {
+	Name      string                 `json:"name"`
+	Fields    map[string]interface{} `json:"fields"`
+	Tags      map[string]interface{} `json:"tags"`
+	Timestamp uint64                 `json:"timestamp"`
+}
+
+type DecoderFunc func([]byte) (*DecodedPayload, error)
+
+var decoders = map[string]DecoderFunc{
+	"milesight_ws101":  DecodeMilesightPayload,
+	"kron_ks3000-lora": DecodeKronPayload,
+	"khomp_dtl200":     DecodeKhompPayload,
+}
+
+func Parse(payload []byte, vendor, model string) (*DecodedPayload, error) {
+	key := vendor + "_" + model
+	decoder, ok := decoders[key]
+	if !ok {
+		return nil, fmt.Errorf("no decoder for %s", key)
+	}
+	return decoder(payload), nil
+}
