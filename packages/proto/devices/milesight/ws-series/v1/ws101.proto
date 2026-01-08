@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+message MilesightPayload {
+  oneof payload {
+    Attributes attributes = 1;
+    Telemetry telemetry = 2;
+    Downlink downlink = 3;
+  }
+}
+
+message Attributes {
+  optional string protocol_version = 1;    // ff01
+  optional string hardware_version = 2;    // ff09
+  optional string firmware_version = 3;    // ff0a
+  optional uint32 tsl = 4;                 // ffff
+  optional string serial_number = 5;       // ff08
+  optional uint32 lorawan_class = 6;       // ff0f
+  optional uint32 reset_event = 7;         // fffe
+  optional uint32 device_status = 8;       // ff0b
+}
+
+message Telemetry {
+  optional uint32 battery = 1;             // 0175
+  optional ButtonPress button_press = 2;   // ff2e
+}
+
+enum ButtonPress {
+  UNKNOWN = 0;
+  SHORT = 1;
+  LONG = 2;
+  DOUBLE = 3;
+}
+
+message Downlink {
+  optional uint32 reporting_interval = 1;  // ff03
+  optional bool led_indicator = 2;         // ff2f
+  optional bool double_press_enable = 3;   // ff74
+  optional bool buzzer_enable = 4;         // ff3e
+  optional bool reboot = 5;                // ff10
+  optional bool query_device_status = 6;   // ff28
+}
