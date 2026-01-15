@@ -68,7 +68,7 @@ func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequ
 		"019b08df-26e7-7f7b-a18f-b3d6c3fdf248",
 		"019b08df-26e7-7866-a0fb-1768122b8584":
 		deviceInfo.ParseConfig.Vendor = "kron"
-		deviceInfo.ParseConfig.Model = "ks3000_wifi"
+		deviceInfo.ParseConfig.Model = "ks3000"
 
 	case "24e124136f315508":
 		deviceInfo.ParseConfig.Vendor = "milesight"
