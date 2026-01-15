@@ -10,16 +10,15 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig
-	Redis     RedisConfig
-	Influxdb3 Influxdb3Config
+	GrpcServer GrpcServerConfig
+	Redis      RedisConfig
+	Influxdb3  Influxdb3Config
 }
 
-type ServerConfig struct {
-	Host string
-	Port string
+type GrpcServerConfig struct {
+	BindAdress string
+	Port       string
 }
-
 type Influxdb3Config struct {
 	Host     string
 	Port     string
@@ -28,7 +27,8 @@ type Influxdb3Config struct {
 }
 
 type RedisConfig struct {
-	Addr         string
+	Host         string
+	Port         string
 	Password     string
 	DB           int
 	PoolSize     int
@@ -46,12 +46,13 @@ func Load() *Config {
 	}
 
 	return &Config{
-		Server: ServerConfig{
-			Host: getEnv("SERVER_HOST", "0.0.0.0"),
-			Port: getEnv("SERVER_PORT", "50054"),
+		GrpcServer: GrpcServerConfig{
+			BindAdress: getEnv("GRPC_SERVER_BIND_ADDRESS", "0.0.0.0"),
+			Port:       getEnv("GRPC_SERVER_PORT", "50054"),
 		},
 		Redis: RedisConfig{
-			Addr:         getEnv("REDIS_ADDR", "localhost:6379"),
+			Host:         getEnv("REDIS_HOST", "127.0.0.1"),
+			Port:         getEnv("REDIS_PORT", "6379"),
 			Password:     getEnv("REDIS_PASSWORD", ""),
 			DB:           getEnvAsInt("REDIS_DB", 0),
 			PoolSize:     getEnvAsInt("REDIS_POOL_SIZE", 20),

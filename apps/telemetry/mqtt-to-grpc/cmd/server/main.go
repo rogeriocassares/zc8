@@ -14,6 +14,7 @@ import (
 
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/uuid"
+	"github.com/rogeriocassares/zc8/apps/telemetry/mqtt-to-grpc/internal/config"
 	pb "github.com/rogeriocassares/zc8/packages/proto/gen/go/telemetry/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -21,16 +22,10 @@ import (
 )
 
 const (
-	defaultName       = "world"
 	channelBufferSize = 100
 	numGrpcWorkers    = 5
 	grpcTimeout       = 5 * time.Second
 	maxRetries        = 3
-)
-
-var (
-	addr = flag.String("addr", "localhost:50054", "the address to connect to")
-	name = flag.String("name", defaultName, "Name to greet")
 )
 
 type MQTTMessage struct {
@@ -49,6 +44,9 @@ func mqttConnLostHandler(c MQTT.Client, err error) {
 }
 
 func main() {
+	// Load configuration
+	cfg := config.Load()
+
 	flag.Parse()
 	ctx, cancel := context.WithCancel(context.Background())
 	// ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -59,7 +57,9 @@ func main() {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	// Init unique gRPC (reusable)
-	grpcClient, err := initGrpcClient(*addr)
+	// Create gRPC server
+	addr := cfg.GrpcServer.Host + ":" + cfg.GrpcServer.Port
+	grpcClient, err := initGrpcClient(addr)
 	if err != nil {
 		log.Fatalf("Failed to initialize gRPC client: %v", err)
 	}

@@ -26,7 +26,7 @@ func main() {
 	defer influxdb3Client.Close()
 
 	// Create gRPC server
-	addr := cfg.Server.Host + ":" + cfg.Server.Port
+	addr := cfg.GrpcServer.BindAdress + ":" + cfg.GrpcServer.Port
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
