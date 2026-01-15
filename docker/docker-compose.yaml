@@ -12,7 +12,23 @@ services:
   #   depends_on:
   #     - redis
 
+  explorer:
+    image: influxdata/influxdb3-ui:1.4.0
+    container_name: influxdb3-explorer
+    ports:
+      - "8888:80"
+    volumes:
+      - ./explorer/config:/app-root/config:ro
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+
+  redisinsight:
+    image: redis/redisinsight:2.70.1
+    ports:
+      - "5540:5540"
+    depends_on:
+      - redis

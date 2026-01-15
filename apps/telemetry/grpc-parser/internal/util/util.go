@@ -1,0 +1,305 @@
+package util
+
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+type DeviceInfo struct {
+	IsActive     bool        `json:"is_active"`
+	IsAuthorized bool        `json:"is_authorized"`
+	OrgID        string      `json:"org_id"`
+	ParseConfig  ParseConfig `json:"parse_config"`
+}
+
+type ParseConfig struct {
+	Type   string          `json:"type"`   // "json", "protobuf", "binary"
+	Schema json.RawMessage `json:"schema"` // Device-specific schema
+}
+
+type ParsedData struct {
+	Name      string                 `json:"name"`
+	Fields    map[string]interface{} `json:"fields"`
+	Tags      map[string]interface{} `json:"tags"`
+	Timestamp uint64                 `json:"timestamp"`
+}
+
+type Output struct {
+	Name      string                 `json:"name"`
+	Fields    map[string]interface{} `json:"fields"`
+	Tags      map[string]interface{} `json:"tags"`
+	Timestamp uint64                 `json:"timestamp"`
+}
+
+// Message type 1: Data payload with dynamic metadata
+type DataMessage struct {
+	Variable string                 `json:"variable"`
+	Time     string                 `json:"time"`
+	Metadata map[string]interface{} `json:"metadata"`
+}
+
+// Message type 2: Log payload
+type LogMessage struct {
+	Param string `json:"param"`
+	ID    string `json:"ID"`
+	Msg   string `json:"msg"`
+}
+
+// MessageType enum
+type MessageType int
+
+const (
+	MessageTypeUnknown MessageType = iota
+	MessageTypeData
+	MessageTypeLog
+)
+
+func IsJSONArray(data []byte) bool {
+	trimmed := bytes.TrimLeft(data, " \t\r\n")
+	return len(trimmed) > 0 && trimmed[0] == '['
+}
+
+func IsJSONObject(data []byte) bool {
+	trimmed := bytes.TrimLeft(data, " \t\r\n")
+	return len(trimmed) > 0 && trimmed[0] == '{'
+}
+
+func MarshalToJson(msg ParsedData) string {
+	outputMsgJson, _ := json.Marshal(msg)
+	// if err != nil {
+	// 	fmt.Println(err.Error())
+	// }
+	return string(outputMsgJson[:])
+}
+
+func MarshalToInflux(msg ParsedData) string {
+	var sb strings.Builder
+	sb.WriteString(msg.Name)
+	sb.WriteString(",")
+	sb.WriteString(MapToCommaString(msg.Tags))
+	sb.WriteString(" ")
+	sb.WriteString(MapToCommaString(msg.Fields))
+	sb.WriteString(" ")
+	sb.WriteString(strconv.FormatUint(uint64(msg.Timestamp), 10))
+
+	// fmt.Printf("MarshalToInflux: %s", sb.String())
+	return string(sb.String())
+}
+
+func MapToCommaString(m map[string]interface{}) string {
+	// fmt.Printf("\n\nMapToCommaString: %v\n", m)
+	var sb strings.Builder
+	for k, v := range m {
+		sb.WriteString(",")
+		sb.WriteString(k)
+		sb.WriteString("=")
+		switch v := v.(type) {
+		case string:
+			if k == "data" {
+				sb.WriteString(`"`)
+				sb.WriteString(v)
+				sb.WriteString(`"`)
+			} else {
+				sb.WriteString(v)
+			}
+		case []byte:
+			if k == "data" {
+				sb.WriteString(`"`)
+				sb.WriteString(hex.EncodeToString(v))
+				sb.WriteString(`"`)
+			} else {
+				sb.WriteString(hex.EncodeToString(v))
+			}
+		case float64:
+			sb.WriteString(strconv.FormatFloat(v, 'f', -1, 64))
+		case uint64:
+			sb.WriteString(strconv.FormatUint(v, 10))
+		case int64:
+			sb.WriteString(strconv.FormatInt(int64(v), 10))
+
+		}
+	}
+	// fmt.Printf("\n\nMapToCommaString ==> %v\n", strings.Replace(sb.String(), ",", "", 1))
+	return strings.Replace(sb.String(), ",", "", 1)
+}
+
+func HexToBytes(s string) []byte {
+	fromHex := [256]byte{
+		'0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7,
+		'8': 8, '9': 9, 'a': 10, 'b': 11, 'c': 12, 'd': 13, 'e': 14, 'f': 15,
+		'A': 10, 'B': 11, 'C': 12, 'D': 13, 'E': 14, 'F': 15,
+	}
+	b := make([]byte, 0, len(s)/2)
+	for i := 0; i < len(s); i += 2 {
+		hi := fromHex[s[i]]
+		lo := fromHex[s[i+1]]
+		b = append(b, (hi<<4)|lo)
+	}
+	return b
+}
+
+// CONVERT B64 to BYTE
+func Base64ToByte(b64 string) ([]byte, error) {
+	b, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return nil, fmt.Errorf("base64 decode error: %w", err)
+	}
+	return b, err
+}
+
+func mergeKeysAndValues(keys1, keys2 map[string]interface{}) map[string]interface{} {
+	merged := make(map[string]interface{})
+	for k, v := range keys1 {
+		merged[k] = v
+	}
+	for k, v := range keys2 {
+		merged[k] = v
+	}
+	return merged
+}
+
+// Helper function to safely get float64 from metadata
+func getFloat64(m map[string]interface{}, key string) (float64, bool) {
+	val, ok := m[key]
+	if !ok {
+		return 0, false
+	}
+
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	default:
+		return 0, false
+	}
+}
+
+// Helper function to safely get int from metadata
+func getInt(m map[string]interface{}, key string) (int, bool) {
+	val, ok := m[key]
+	if !ok {
+		return 0, false
+	}
+
+	switch v := val.(type) {
+	case float64:
+		return int(v), true
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	default:
+		return 0, false
+	}
+}
+
+// Process metadata dynamically
+func ProcessMetadata(metadata map[string]interface{}) {
+	fmt.Println("    Metadata fields:")
+
+	// Print all fields dynamically
+	for key, value := range metadata {
+		switch v := value.(type) {
+		case float64:
+			fmt.Printf("      %s: %.2f\n", key, v)
+		case int:
+			fmt.Printf("      %s: %d\n", key, v)
+		case string:
+			fmt.Printf("      %s: %s\n", key, v)
+		default:
+			fmt.Printf("      %s: %v\n", key, v)
+		}
+	}
+
+	// Example: Check for specific field patterns
+	if u0, ok := getFloat64(metadata, "U0"); ok {
+		fmt.Printf("    ⚡ Detected electrical data (U0=%.2fV)\n", u0)
+	}
+
+	if adp, ok := getFloat64(metadata, "ADP"); ok {
+		fmt.Printf("    📈 Detected analog data (ADP=%.2f)\n", adp)
+	}
+}
+
+// Process message based on type
+func ProcessMessage(msgType MessageType, data interface{}) {
+	switch msgType {
+	case MessageTypeData:
+		switch v := data.(type) {
+		case []DataMessage:
+			fmt.Println("📊 Processing Data Messages (Array):")
+			for i, msg := range v {
+				fmt.Printf("  Message %d:\n", i)
+				fmt.Printf("    Variable: %s\n", msg.Variable)
+				fmt.Printf("    Time: %s\n", msg.Time)
+				ProcessMetadata(msg.Metadata)
+			}
+		case DataMessage:
+			fmt.Println("📊 Processing Data Message (Single):")
+			fmt.Printf("  Variable: %s\n", v.Variable)
+			fmt.Printf("  Time: %s\n", v.Time)
+			ProcessMetadata(v.Metadata)
+		}
+
+	case MessageTypeLog:
+		if logMsg, ok := data.(LogMessage); ok {
+			fmt.Println("📝 Processing Log Message:")
+			fmt.Printf("  ID: %s\n", logMsg.ID)
+			fmt.Printf("  Message: %s\n", logMsg.Msg)
+		}
+
+	case MessageTypeUnknown:
+		fmt.Println("❌ Unknown message type")
+	}
+	fmt.Println()
+}
+
+// Message router
+func RouteMessage(jsonStr string) (MessageType, interface{}, error) {
+	// Check if it's an array (data messages come as array)
+	if jsonStr[0] == '[' {
+		var dataMessages []DataMessage
+		err := json.Unmarshal([]byte(jsonStr), &dataMessages)
+		if err != nil {
+			return MessageTypeUnknown, nil, fmt.Errorf("failed to unmarshal data message: %w", err)
+		}
+		return MessageTypeData, dataMessages, nil
+	}
+
+	// Try to unmarshal as object
+	var raw map[string]interface{}
+	err := json.Unmarshal([]byte(jsonStr), &raw)
+	if err != nil {
+		return MessageTypeUnknown, nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+
+	// Check for log message (has "param" field)
+	if param, ok := raw["param"].(string); ok && param == "log" {
+		var logMsg LogMessage
+		err := json.Unmarshal([]byte(jsonStr), &logMsg)
+		if err != nil {
+			return MessageTypeUnknown, nil, fmt.Errorf("failed to unmarshal log message: %w", err)
+		}
+		return MessageTypeLog, logMsg, nil
+	}
+
+	// Check for data message (has "variable" field)
+	if _, ok := raw["variable"]; ok {
+		var dataMsg DataMessage
+		err := json.Unmarshal([]byte(jsonStr), &dataMsg)
+		if err != nil {
+			return MessageTypeUnknown, nil, fmt.Errorf("failed to unmarshal data message: %w", err)
+		}
+		return MessageTypeData, dataMsg, nil
+	}
+
+	return MessageTypeUnknown, nil, fmt.Errorf("unknown message type")
+}

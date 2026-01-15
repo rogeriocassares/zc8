@@ -10,7 +10,22 @@
 
 import { cors } from "@elysiajs/cors";
 import { Elysia, t } from "elysia";
+import { createClient } from 'redis';
+// import { async } from '../../web/.next/dev/types/routes';
 
+// Define types
+type RedisStreamMessage = {
+  id: string;
+  message: {
+    orgId: string;
+    data: string;
+    timestamp: string;
+  };
+};
+
+// Redis client
+const redis = createClient({ url: 'redis://localhost:6379' });
+await redis.connect();
 const app = new Elysia()
   .use(
     cors({
@@ -18,16 +33,71 @@ const app = new Elysia()
       credentials: true,
     }),
   )
+
   .get("/", () => ({ message: "Hello from Elysia!", id: "1" }))
+  .get(
+    '/events',
+    async ({ set }) => {
+      set.headers['Content-Type'] = 'text/event-stream';
+      set.headers['Cache-Control'] = 'no-cache';
+      set.headers['Connection'] = 'keep-alive';
+      set.headers['Content-Encoding'] = 'none';
 
-  .get("/api/users", () => ({
-    users: [
-      { id: 1, name: "John Doe", email: "john@example.com" },
-      { id: 2, name: "Jane Smith", email: "jane@example.com" },
-      { id: 3, name: "Bob Johnson", email: "bob@example.com" },
-    ],
-  }))
+      const streamKey = 'stream:{org123}:data';
 
+      const stream = new ReadableStream({
+        async start(controller) {
+          controller.enqueue(`data: {"status":"connected"}\n\n`);
+
+          let lastId = '$';
+          let isAborted = false;
+
+          // Manual abort tracking
+          if ((controller as any).signal?.aborted) {
+            isAborted = true;
+          } else {
+            (controller as any).signal?.addEventListener('abort', () => {
+              isAborted = true;
+            });
+          }
+
+          const read = async () => {
+            while (!isAborted) {
+              try {
+                const result = await redis.xRead(
+                  { key: 'stream:{org123}:data', id: lastId },
+                  { BLOCK: 5000, COUNT: 1 }
+                );
+
+                if (isAborted) break;
+
+                if (result) {
+                  for (const { id, message } of result[0].messages) {
+                    controller.enqueue(`data: ${JSON.stringify({ id, message })}\n\n`);
+                    lastId = id;
+                  }
+                }
+              } catch (err) {
+                if (!isAborted) {
+                  controller.enqueue(`data: {"error":"${(err as Error).message}"}\n\n`);
+                }
+                break;
+              }
+            }
+
+            controller.close();
+          };
+
+          read();
+        }
+      });
+
+      return stream;
+    },
+    {
+      response: t.Unknown(),
+    }
+  )
   .get("/api/users/:id", ({ params }: { params: { id: string } }) => {
     const id = params.id;
     const userId = parseInt(id);
@@ -73,7 +143,10 @@ const app = new Elysia()
     message: `User ${id} deleted`,
   }))
 
-  .listen(3333);
+  .listen({
+    port: 3333,
+    hostname: '0.0.0.0'
+  });
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`,
