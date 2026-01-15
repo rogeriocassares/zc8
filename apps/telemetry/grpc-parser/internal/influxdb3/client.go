@@ -10,8 +10,10 @@ import (
 // var Client *influxdb3.Client
 
 func NewClient(cfg *config.Influxdb3Config) *influxdb3.Client {
+	addr := cfg.Host + ":" + cfg.Port
+
 	client, err := influxdb3.New(influxdb3.ClientConfig{
-		Host:     cfg.Host,
+		Host:     addr,
 		Token:    cfg.Token,
 		Database: cfg.Database,
 	})

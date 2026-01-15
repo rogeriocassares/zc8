@@ -10,8 +10,10 @@ import (
 )
 
 func NewClient(cfg *config.RedisConfig) *redis.Client {
+	addr := cfg.Host + ":" + cfg.Port
+
 	rdb := redis.NewClient(&redis.Options{
-		Addr:         cfg.Addr,
+		Addr:         addr,
 		Password:     cfg.Password,
 		DB:           cfg.DB,
 		PoolSize:     cfg.PoolSize,

@@ -31,7 +31,7 @@ COPY . .
 RUN go mod tidy
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /go/bin/mqtt-to-grpc .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /go/bin/mqtt-to-grpc ./cmd/server
 
 ############################
 # STEP 2 build a small image
