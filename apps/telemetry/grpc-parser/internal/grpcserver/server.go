@@ -1,4 +1,4 @@
-package server
+package grpcserver
 
 import (
 	"context"
@@ -11,7 +11,13 @@ import (
 	"github.com/InfluxCommunity/influxdb3-go/v2/influxdb3"
 	"github.com/redis/go-redis/v9"
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/parser"
+	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/util"
 	pb "github.com/rogeriocassares/zc8/packages/proto/gen/go/telemetry/v1"
+
+	// _ "github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/parser"
+	// _ "github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/parser/binary/kron"
+	_ "github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/parser/kron"
+	_ "github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/parser/milesight"
 )
 
 type Server struct {
@@ -22,7 +28,6 @@ type Server struct {
 }
 
 func New(redisClient *redis.Client, influxdb3Client *influxdb3.Client) *Server {
-	// func New(influxdb3Client *influxdb3.Client) *Server {
 	return &Server{
 		redis:     redisClient,
 		parser:    parser.New(),
@@ -34,57 +39,58 @@ type DeviceInfo struct {
 	IsActive     bool               `json:"is_active"`
 	IsAuthorized bool               `json:"is_authorized"`
 	OrgID        string             `json:"org_id"`
+	TeamID       string             `json:"team_id"`
 	ParseConfig  parser.ParseConfig `json:"parse_config"`
 }
 
 func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequest) (*pb.IngestTelemetryResponse, error) {
 
-	fmt.Printf("\nMessage received: %v", in.Data)
+	// fmt.Printf("\nMessage received: %v", in.Data)
 	fmt.Printf("\nDevice received: %v", in.DeviceId)
 	// Get device info from Redis
 	// deviceInfo, err := s.getDeviceInfo(ctx, in.DeviceId)
 	var deviceInfo DeviceInfo
-	var err error
+
 	deviceInfo.IsActive = true
 	deviceInfo.IsAuthorized = true
 	deviceInfo.OrgID = "org123"
-	deviceInfo.ParseConfig.Type = "json"
-	deviceInfo.ParseConfig.Model = "deviceModel"
-	deviceInfo.ParseConfig.Schema = nil
-	deviceInfo.ParseConfig.Custom = false
+	deviceInfo.TeamID = "team123"
+	deviceInfo.ParseConfig.Direction = "uplink"
 
 	switch in.DeviceId {
 	case "019b76c4-d38a-7eba-9036-3586652112a4":
+		deviceInfo.ParseConfig.Vendor = "agent"
 		deviceInfo.ParseConfig.Model = "ping"
-		deviceInfo.ParseConfig.Type = "log"
 
 	case "019b08df-26e7-7506-a5f6-916b2bef24f4",
 		"019b08df-26e7-71b5-8df6-56c2e954ac91",
 		"019b08df-26e7-7119-97da-523f9236db80",
 		"019b08df-26e7-7f7b-a18f-b3d6c3fdf248",
 		"019b08df-26e7-7866-a0fb-1768122b8584":
+		deviceInfo.ParseConfig.Vendor = "kron"
 		deviceInfo.ParseConfig.Model = "ks3000_wifi"
-		deviceInfo.ParseConfig.Type = "json"
 
-	case "24e124133f315508":
-		deviceInfo.ParseConfig.Model = "em300-di"
-		deviceInfo.ParseConfig.Type = "binary" // or chirpstackv4 or lns
+	case "24e124136f315508":
+		deviceInfo.ParseConfig.Vendor = "milesight"
+		deviceInfo.ParseConfig.Model = "em300_di"
+		deviceInfo.ParseConfig.Origin = "chirpstackv4"
+
 		in.DeviceId = "019b9ade-55a0-746e-8d41-b2537631441c"
 
 	case "24e124126d284622":
-		deviceInfo.ParseConfig.Model = "em500-swl"
-		deviceInfo.ParseConfig.Type = "binary" // or chirpstackv4  or lns
+		deviceInfo.ParseConfig.Vendor = "milesight"
+		deviceInfo.ParseConfig.Model = "em500_swl"
+		deviceInfo.ParseConfig.Origin = "chirpstackv4"
+
 		in.DeviceId = "019b9ae2-fc84-7396-9ea8-fd2a041b7664"
 
 	case "24e124535f318437":
+		deviceInfo.ParseConfig.Vendor = "milesight"
 		deviceInfo.ParseConfig.Model = "ws101"
-		deviceInfo.ParseConfig.Type = "binary" // or chirpstackv4  or lns
+		deviceInfo.ParseConfig.Origin = "chirpstackv4"
+
 		in.DeviceId = "019b9ae3-337e-7fa0-9b72-3861f0e6c6bd"
 
-	}
-
-	if err != nil {
-		return nil, status.Error(codes.NotFound, err.Error())
 	}
 
 	// Check activation
@@ -98,22 +104,21 @@ func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequ
 	}
 
 	// Parse payload using parser
-	parsedData, err := s.parser.Parse(in.Data, deviceInfo.ParseConfig)
+	parsedData, err := s.parser.Parse(deviceInfo.ParseConfig, in.Data)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("parse failed: %v", err))
 	}
 
-	parsedData.Tags = map[string]interface{}{
-		"deviceId": in.DeviceId}
+	parsedData.Tags["device_id"] = in.DeviceId
 
 	// Write to Redis Stream
 	streamKey := fmt.Sprintf("stream:{%s}:data", deviceInfo.OrgID)
-	if err := s.writeToStream(ctx, streamKey, in.DeviceId, *parsedData); err != nil {
+	if err := s.writeToRedisStream(ctx, streamKey, in.DeviceId, *parsedData); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to write: %v", err))
 	}
 
 	// Write to Influxdb3
-	if err := s.writeToInfluxdb3(ctx, streamKey, in.DeviceId, *parsedData); err != nil {
+	if err := s.writeToInfluxdb3(ctx, *parsedData); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to write: %v", err))
 	}
 
@@ -141,9 +146,13 @@ func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequ
 // 	return &deviceInfo, nil
 // }
 
-func (s *Server) writeToStream(ctx context.Context, streamKey, deviceId string, data parser.ParsedData) error {
+func (s *Server) writeToRedisStream(ctx context.Context, streamKey, deviceId string, data util.ParsedData) error {
 	// dataJSON, _ := json.Marshal(data)
-	dataJSON := parser.MarshalToJson(data)
+	dataJSON := util.MarshalToJson(data)
+
+	if dataJSON == "" {
+		return fmt.Errorf("no data written to Redis, errors encountered. No fields were provided")
+	}
 
 	_, err := s.redis.XAdd(ctx, &redis.XAddArgs{
 		Stream: streamKey,
@@ -159,13 +168,19 @@ func (s *Server) writeToStream(ctx context.Context, streamKey, deviceId string, 
 	return err
 }
 
-func (s *Server) writeToInfluxdb3(ctx context.Context, influxdb3Client, deviceId string, data parser.ParsedData) error {
-	dataInflux := parser.MarshalToInflux(data)
+func (s *Server) writeToInfluxdb3(ctx context.Context, data util.ParsedData) error {
+	dataInflux := util.MarshalToInflux(data)
 
-	err := s.influxdb3.Write(context.Background(), []byte(dataInflux))
+	if dataInflux == "" {
+		return fmt.Errorf("no data written to Influxdb, errors encountered. No fields were provided")
+	}
+
+	// err := s.influxdb3.Write(context.Background(), []byte(dataInflux))
+	err := s.influxdb3.Write(ctx, []byte(dataInflux))
 
 	if err != nil {
-		panic(err)
+		fmt.Printf("\nError writing to InfluxDB: %v", err)
+		return err
 	}
 
 	fmt.Printf("\nMessage wrote to influxdb3: %v", dataInflux)
