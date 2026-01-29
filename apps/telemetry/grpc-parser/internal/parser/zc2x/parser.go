@@ -10,9 +10,9 @@ import (
 
 func init() {
 	// vendor/model/direction
-	parser.RegisterParser("milesight/em300_di/uplink", ParseMilesightUplink)
-	parser.RegisterParser("milesight/em500_swl/uplink", ParseMilesightUplink)
-	parser.RegisterParser("milesight/ws101/uplink", ParseMilesightUplink)
+	parser.RegisterParser("zc2x/can/uplink", ParseZC2XUplink)
+	parser.RegisterParser("zc2x/imu/uplink", ParseZC2XUplink)
+	parser.RegisterParser("zc2x/gps/uplink", ParseZC2XUplink)
 
 }
 
@@ -33,7 +33,7 @@ const (
 	ReadSensorStatusOutOfRange                               // 2
 )
 
-func ParseMilesightUplink(payload []byte, model string) (*util.ParsedData, error) {
+func ParseZC2XUplink(payload []byte, model string) (*util.ParsedData, error) {
 	dp := &util.ParsedData{
 		Name:   "",
 		Fields: make(map[string]interface{}),

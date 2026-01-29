@@ -3,6 +3,9 @@ package main
 import (
 	"log"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/config"
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/grpcserver"
@@ -16,6 +19,9 @@ import (
 func main() {
 	// Load configuration
 	cfg := config.Load()
+	// Initialize clients
+	// postgresClient := postgres.NewClient(&cfg.Postgres)
+	// defer postgres.Close(postgresClient)
 
 	// Initialize Redis
 	redisClient := redis.NewClient(&cfg.Redis)
@@ -32,10 +38,18 @@ func main() {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterTelemetryServiceServer(s, grpcserver.New(redisClient, influxdb3Client))
+	// pb.RegisterTelemetryServiceServer(s, grpcserver.NewServer(redisClient, postgresClient, influxdb3Client))
+	pb.RegisterTelemetryServiceServer(s, grpcserver.NewServer(redisClient, influxdb3Client))
 
 	log.Printf("server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down gracefully...")
 }

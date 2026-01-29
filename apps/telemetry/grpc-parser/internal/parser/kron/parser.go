@@ -11,8 +11,8 @@ import (
 )
 
 func init() {
-	// vendor/direction
-	parser.RegisterParser("kron/uplink", ParseKronUplink)
+	// vendor/model/direction
+	parser.RegisterParser("kron/ks3000/uplink", ParseKronKS3000Uplink)
 }
 
 type KS3000 struct {
@@ -67,7 +67,7 @@ func (r *KS3000) UnmarshalKS3000JSON(data []byte) error {
 	return nil
 }
 
-func ParseKronUplink(payload []byte) (*util.ParsedData, error) {
+func ParseKronKS3000Uplink(payload []byte, model string) (*util.ParsedData, error) {
 	fmt.Printf("\n ### DecodeKronKS3000WiFi ###\n")
 	dp := &util.ParsedData{
 		Fields: make(map[string]interface{}),

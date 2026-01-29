@@ -32,3 +32,22 @@ services:
       - "5540:5540"
     depends_on:
       - redis
+
+  postgres:
+    image: postgres:18.1-alpine3.23
+    container_name: telemetry-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      # POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-telemetry_secret_password}
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # - ./init-db:/docker-entrypoint-initdb.d  # Optional: initialization scripts
+
+volumes:
+  postgres_data:
+    driver: local

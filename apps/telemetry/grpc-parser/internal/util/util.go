@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type DeviceInfo struct {
@@ -302,4 +304,38 @@ func RouteMessage(jsonStr string) (MessageType, interface{}, error) {
 	}
 
 	return MessageTypeUnknown, nil, fmt.Errorf("unknown message type")
+}
+
+func FloatToTime(timestamp float64) time.Time {
+	// Handle negative timestamps properly
+	if timestamp >= 0 {
+		sec := int64(timestamp)
+		nsec := int64(math.Round((timestamp - float64(sec)) * 1e9))
+		return time.Unix(sec, nsec).UTC()
+	} else {
+		sec := int64(math.Ceil(timestamp)) - 1
+		nsec := int64(math.Round((timestamp - float64(sec)) * 1e9))
+		return time.Unix(sec, nsec).UTC()
+	}
+}
+
+func RoundFloat(val float64, precision uint) float64 {
+	ratio := math.Pow(10, float64(precision))
+	return math.Round(val*ratio) / ratio
+}
+
+func StrToInt32(s string) int32 {
+	i64, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		fmt.Printf("StrToInt32: Invalid Conversion")
+	}
+	return int32(i64)
+}
+
+func StrToTimeDuration(s string) time.Duration {
+	dur, err := time.ParseDuration(s)
+	if err != nil {
+		fmt.Printf("StrToTimeDuration: Invalid Conversion")
+	}
+	return dur
 }
