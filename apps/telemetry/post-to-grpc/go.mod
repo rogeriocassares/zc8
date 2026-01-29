@@ -3,7 +3,6 @@ module github.com/rogeriocassares/zc8/apps/telemetry/post-to-grpc
 go 1.25.5
 
 require (
-	github.com/rogeriocassares/zc8/packages/proto v0.0.0-20251217223456-fbc10b61b6c1
 	google.golang.org/grpc v1.78.0
 )
 

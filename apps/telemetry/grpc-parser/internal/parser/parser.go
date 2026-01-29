@@ -22,11 +22,11 @@ type Parser struct {
 }
 
 // New creates a new Parser instance
-func New() *Parser {
+func NewServer() *Parser {
 	return &Parser{}
 }
 
-type ParserFunc func([]byte) (*util.ParsedData, error)
+type ParserFunc func([]byte, string) (*util.ParsedData, error)
 
 var parserMap sync.Map
 
@@ -64,8 +64,8 @@ func (p *Parser) Parse(config ParseConfig, data []byte) (*util.ParsedData, error
 	}
 
 	// vendor/direction
-	key := config.Vendor + "/" + config.Direction
-	parseVTD, ok := GetParser(key) // parse by vendor, transport and direction
+	key := config.Vendor + "/" + config.Model + "/" + config.Direction
+	parseVMD, ok := GetParser(key) // parse by vendor, transport and direction
 	if !ok {
 		return nil, fmt.Errorf("no parser for %s", key)
 	}
@@ -78,7 +78,7 @@ func (p *Parser) Parse(config ParseConfig, data []byte) (*util.ParsedData, error
 	if !ok {
 		return nil, fmt.Errorf("data is not []byte")
 	}
-	dd, err := parseVTD(dataBytes) // LongTermThoughts: pass model if necessary
+	dd, err := parseVMD(dataBytes, config.Model) // LongTermThoughts: pass model if necessary
 
 	if err != nil {
 		return nil, err

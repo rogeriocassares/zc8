@@ -21,7 +21,6 @@ service CommandService {
 
 message IngestTelemetryRequest {
   string device_id = 1;
-  // google.protobuf.Any data = 2;
   bytes data = 2;
   google.protobuf.Timestamp timestamp = 3;
 }
@@ -30,6 +29,41 @@ message IngestTelemetryResponse {
   bool success = 1;
   string message_id = 2;
   string error = 3;
+}
+
+// Embedded message for devices that support Protobuf
+message TelemetryData {
+  uint64 timestamp = 1;
+
+  oneof data {
+    CANFrame can = 2;
+    IMUData  imu = 3;
+    GPSData  gps = 4;
+  }
+}
+
+message CANFrame {
+  uint32 id = 1;
+  bytes data = 2; // 8-byte CAN payload
+}
+
+message IMUData {
+  float ax = 1; // acceleration
+  float ay = 2;
+  float az = 3;
+  float gx = 4; // gyroscope
+  float gy = 5;
+  float gz = 6;
+  float r = 7; // euler orientation
+  float p = 8;
+  float y = 9;
+}
+
+message GPSData {
+  double latitude = 1;
+  double longitude = 2;
+  float altitude = 3;
+  float speed = 4;
 }
 
 message SendCommandRequest {

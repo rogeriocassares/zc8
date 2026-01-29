@@ -10,9 +10,10 @@ import (
 )
 
 type Config struct {
-	GrpcServer GrpcServerConfig
-	Redis      RedisConfig
-	Influxdb3  Influxdb3Config
+	GrpcServer GrpcServerConfig `mapstructure:"grpcserver"`
+	Influxdb3  Influxdb3Config  `mapstructure:"influxdb3"`
+	Postgres   PostgresConfig   `mapstructure:"postgres"`
+	Redis      RedisConfig      `mapstructure:"redis"`
 }
 
 type GrpcServerConfig struct {
@@ -38,6 +39,22 @@ type RedisConfig struct {
 	WriteTimeout time.Duration
 }
 
+type PostgresConfig struct {
+	Host              string
+	Port              string
+	User              string
+	Password          string
+	Database          string
+	SSLMode           string
+	MaxConns          string // int
+	MinConns          string // int
+	MaxConnLifetime   string // time.Duration
+	MaxConnIdleTime   string // time.Duration
+	HealthCheckPeriod string // time.Duration
+	ConnectTimeout    string // time.Duration
+	StatementTimeout  string // time.Duration
+}
+
 // Load loads configuration from environment variables
 func Load() *Config {
 	// Load .env file if it exists (optional, for local development)
@@ -51,7 +68,8 @@ func Load() *Config {
 			Port:       getEnv("GRPC_SERVER_PORT", "50054"),
 		},
 		Redis: RedisConfig{
-			Host:         getEnv("REDIS_HOST", "127.0.0.1"),
+			Host: getEnv("REDIS_HOST", "127.0.0.1"),
+			// Host         string        `mapstructure:"host" default:"localhost"`
 			Port:         getEnv("REDIS_PORT", "6379"),
 			Password:     getEnv("REDIS_PASSWORD", ""),
 			DB:           getEnvAsInt("REDIS_DB", 0),
@@ -66,6 +84,21 @@ func Load() *Config {
 			Port:     getEnv("INFLUXDB3_PORT", "8181"),
 			Token:    getEnv("INFLUXDB3_TOKEN", "0.0.0.0"),
 			Database: getEnv("INFLUXDB3_DATABASE", "iot_rp40d"),
+		},
+		Postgres: PostgresConfig{
+			Host:              getEnv("POSTGRES_HOST", ""),
+			Port:              getEnv("POSTGRES_PORT", ""),
+			User:              getEnv("POSTGRES_USER", ""),
+			Password:          getEnv("POSTGRES_PASSWORD", ""),
+			Database:          getEnv("POSTGRES_DATABASE", ""),
+			SSLMode:           getEnv("POSTGRES_SSL_MODE", ""),
+			MaxConns:          getEnv("POSTGRES_MAX_CONNS", "25"),
+			MinConns:          getEnv("POSTGRES_MIN_CONNS", "5"),
+			MaxConnLifetime:   getEnv("POSTGRES_MAX_CONN_LIFETIME", ""),
+			MaxConnIdleTime:   getEnv("POSTGRES_MAX_CONN_IDLE_TIME", ""),
+			HealthCheckPeriod: getEnv("POSTGRES_HEALTH_CHECK_PERIOD", ""),
+			ConnectTimeout:    getEnv("POSTGRES_CONNECT_TIMEOUT", ""),
+			StatementTimeout:  getEnv("POSTGRES_STATEMENT_TIMEOUT", ""),
 		},
 	}
 }

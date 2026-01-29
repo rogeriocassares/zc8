@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/rogeriocassares/zc8/packages/proto v0.0.0-20251217223456-fbc10b61b6c1
+	github.com/joho/godotenv v1.5.1
 	google.golang.org/grpc v1.78.0
 )
 
