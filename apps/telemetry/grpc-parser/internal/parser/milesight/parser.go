@@ -102,7 +102,7 @@ func ParseMilesightUplink(payload []byte, model string) (*util.ParsedData, error
 					_ = pulseConv
 					// IEEE-754 float32 pulse counter (little-endian)
 					raw := binary.LittleEndian.Uint32(payload[i+4 : i+8])
-					pulseCount := math.Float32frombits(raw)
+					pulseCount := float64(math.Float32frombits(raw))
 					dp.Fields["pulse_count"] = pulseCount
 					i += 8
 				}
