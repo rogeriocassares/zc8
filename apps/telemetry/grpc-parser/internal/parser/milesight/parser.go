@@ -69,11 +69,11 @@ func ParseMilesightUplink(payload []byte, model string) (*util.ParsedData, error
 					v := binary.LittleEndian.Uint16(payload[i : i+2])
 					switch v {
 					case 0xffff:
-						dp.Fields["water_level"] = float64(v)
 						dp.Fields["water_level_error"] = uint64(ReadSensorStatusCollectionFailed)
+
 					case 0xfffd:
-						dp.Fields["water_level"] = float64(v)
 						dp.Fields["water_level_error"] = uint64(ReadSensorStatusOutOfRange)
+
 					default:
 						dp.Fields["water_level"] = float64(v) / 100.0
 						dp.Fields["water_level_error"] = uint64(ReadSensorStatusNoError)
