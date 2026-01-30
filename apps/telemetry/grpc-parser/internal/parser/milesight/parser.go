@@ -3,6 +3,7 @@ package milesight
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/parser"
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/util"
@@ -95,11 +96,14 @@ func ParseMilesightUplink(payload []byte, model string) (*util.ParsedData, error
 			switch chType {
 			case 0xe1:
 				if i+7 < len(payload) {
-					water_conv := binary.LittleEndian.Uint16(payload[i:i+2]) / 10
-					pulse_conv := binary.LittleEndian.Uint16(payload[i+2:i+4]) / 10
-					water := binary.BigEndian.Uint32(payload[i+4 : i+8])
-					counter := uint64(water) / (uint64(water_conv) * uint64(pulse_conv))
-					dp.Fields["counter"] = counter
+					waterConv := float32(binary.LittleEndian.Uint16(payload[i:i+2])) / 10.0
+					pulseConv := float32(binary.LittleEndian.Uint16(payload[i+2:i+4])) / 10.0
+					_ = waterConv
+					_ = pulseConv
+					// IEEE-754 float32 pulse counter (little-endian)
+					raw := binary.LittleEndian.Uint32(payload[i+4 : i+8])
+					pulseCount := math.Float32frombits(raw)
+					dp.Fields["pulse_count"] = pulseCount
 					i += 8
 				}
 			}
