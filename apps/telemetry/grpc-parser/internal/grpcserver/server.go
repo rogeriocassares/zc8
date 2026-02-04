@@ -1,9 +1,13 @@
 package grpcserver
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
+	"strconv"
 	"sync"
 	"time"
 
@@ -25,14 +29,89 @@ import (
 	_ "github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/parser/milesight"
 )
 
+type WriteBatcher struct {
+	buf    bytes.Buffer
+	points int
+}
+type SensorTimeSeriesWriter struct {
+	client *influxdb3.Client
+	queue  chan util.ParsedData
+	batch  WriteBatcher
+
+	// queue   chan *Point
+	// client  *influx.Client
+}
+
+type SensorRealTimeWriter struct {
+	client *redis.Client
+	queue  chan util.ParsedData
+
+	// queue   chan *Point
+	// client  *influx.Client
+}
+
 type Server struct {
+	redis *redis.Client
 	pb.UnimplementedTelemetryServiceServer
-	redis      *redis.Client
-	postgres   *postgres.Client
-	influxdb3  *influxdb3.Client
-	parser     *parser.Parser
-	localCache *ristretto.Cache // Local in-memory cache
-	devicePool *sync.Pool       // Object pooling
+	postgres               *postgres.Client
+	parser                 *parser.Parser
+	localCache             *ristretto.Cache // Local in-memory cache
+	devicePool             *sync.Pool       // Object pooling
+	sensorRealTimeWriter   *SensorRealTimeWriter
+	sensorTimeSeriesWriter *SensorTimeSeriesWriter
+}
+
+type SensorReading struct {
+	SensorID  string
+	DeviceID  string
+	Location  string
+	Timestamp time.Time
+	Values    map[string]float64 // sensor_type → value
+}
+
+const (
+	measurement    = "sensor_data"
+	maxBatchPoints = 1
+	// maxBatchPoints = 5000
+	maxBatchBytes = 2 * 1024 * 1024 // 2 MB
+)
+
+// type Encoder interface {
+// 	Encode(data util.ParsedData)
+// 	ShouldFlush() bool
+// 	Flush() error
+// 	Reset()
+// }
+
+// type RedisEncoder struct {
+// 	pipe      redis.Pipeliner
+// 	count     int
+// 	maxCount  int
+// 	lastFlush time.Time
+// }
+
+func NewSensorTimeSeriesWriter(client *influxdb3.Client) *SensorTimeSeriesWriter {
+	queueSize := 100_000 // tune based on memory
+
+	w := &SensorTimeSeriesWriter{
+		client: client,
+		queue:  make(chan util.ParsedData, queueSize),
+	}
+	// start workers AFTER server is fully constructed
+	w.startInfluxWorkers(8) // IO-bound → tune based on throughput	return w
+	return w
+}
+
+func NewSensorRealTimeWriter(client *redis.Client) *SensorRealTimeWriter {
+	queueSize := 100_000 // tune based on memory
+
+	w := &SensorRealTimeWriter{
+		client: client,
+		queue:  make(chan util.ParsedData, queueSize),
+	}
+	// start workers AFTER server is fully constructed
+	w.startRedisWorkers(8) // IO-bound → tune based on throughput	return w
+	return w
 }
 
 // func NewServer(redisClient *redis.Client, postgresClient *postgres.Client, influxdb3Client *influxdb3.Client) *Server {
@@ -47,55 +126,21 @@ func NewServer(redisClient *redis.Client, influxdb3Client *influxdb3.Client) *Se
 		return nil
 	}
 
-	return &Server{
-		redis: redisClient,
-		// postgres:   postgresClient,
-		parser:     parser.NewServer(),
-		influxdb3:  influxdb3Client,
+	s := &Server{
+		redis:  redisClient,
+		parser: parser.NewServer(),
+		// influxdb3:   influxdb3Client,
 		localCache: cache,
+		// influxQueue: make(chan util.ParsedData, queueSize),
 		devicePool: &sync.Pool{
 			New: func() interface{} {
 				return &DeviceInfo{}
 			},
 		},
+		sensorRealTimeWriter:   NewSensorRealTimeWriter(redisClient),
+		sensorTimeSeriesWriter: NewSensorTimeSeriesWriter(influxdb3Client),
 	}
-}
-
-type DeviceInfo struct {
-	IsActive     bool               `json:"is_active"`
-	IsAuthorized bool               `json:"is_authorized"`
-	TenantID     string             `json:"tenant_id"`
-	TeamID       string             `json:"team_id"`
-	ParseConfig  parser.ParseConfig `json:"parse_config"`
-}
-
-func (s *Server) validateDeviceInCacheOrDB(ctx context.Context, deviceID string) (bool, error) {
-	// 1. Check Redis first
-	val, err := s.redis.Get(ctx, "auth:"+deviceID).Result()
-	if err == nil {
-		valid := val == "true"
-		return valid, nil
-	}
-	if err != redis.Nil {
-		return false, err // Redis error
-	}
-
-	// // 2. Fallback to PostgreSQL
-	// valid, err := validateDeviceInDB(deviceID)
-	// if err != nil {
-	// 	return false, err
-	// }
-	// bypass:
-	valid := true
-
-	// 3. Cache result (even if false)
-	status := "false"
-	if valid {
-		status = "true"
-	}
-	s.redis.Set(ctx, "auth:"+deviceID, status, time.Hour)
-
-	return valid, nil
+	return s
 }
 
 func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequest) (*pb.IngestTelemetryResponse, error) {
@@ -123,6 +168,11 @@ func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequ
 	// status: Battery, signal margin, or device health
 	// error: Payload or scheduling error
 
+	// sensors:{acme}:00
+	// sensors:{acme}:01
+	// sensors:{acme}:31
+
+	deviceInfo.ParseConfig.Measurement = "sensor_data"
 	deviceInfo.IsActive = true
 	deviceInfo.IsAuthorized = true
 	deviceInfo.TenantID = "org123"
@@ -144,43 +194,43 @@ func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequ
 
 	// ks3000_lora
 	// 	case "":
-	// 		deviceInfo.ParseConfig.Vendor = "milesight"
+	// 		deviceInfo.ParseConfig.Vendor = "kron"
 	// 		deviceInfo.ParseConfig.Model = "ks3000"
 	// 		deviceInfo.ParseConfig.Origin = "chirpstackv4"
 	// 		in.DeviceId = "019be702-190b-7d8d-b057-4b6ab585792c"
 
 	// case "":
-	// 		deviceInfo.ParseConfig.Vendor = "milesight"
+	// 		deviceInfo.ParseConfig.Vendor = "kron"
 	// 		deviceInfo.ParseConfig.Model = "ks3000"
 	// 		deviceInfo.ParseConfig.Origin = "chirpstackv4"
 	// 		in.DeviceId = "019be702-190b-764a-9dbf-d28c33b11b3d"
 
 	// case "":
-	// 		deviceInfo.ParseConfig.Vendor = "milesight"
+	// 		deviceInfo.ParseConfig.Vendor = "kron"
 	// 		deviceInfo.ParseConfig.Model = "ks3000"
 	// 		deviceInfo.ParseConfig.Origin = "chirpstackv4"
 	// 		in.DeviceId = "019be702-190b-7bc0-83f2-48660dc8681b"
 
 	// case "":
-	// 		deviceInfo.ParseConfig.Vendor = "milesight"
+	// 		deviceInfo.ParseConfig.Vendor = "kron"
 	// 		deviceInfo.ParseConfig.Model = "ks3000"
 	// 		deviceInfo.ParseConfig.Origin = "chirpstackv4"
 	// 		in.DeviceId = "019be702-190b-7128-970e-9a8bc4c31c76"
 
 	// case "":
-	// 		deviceInfo.ParseConfig.Vendor = "milesight"
+	// 		deviceInfo.ParseConfig.Vendor = "kron"
 	// 		deviceInfo.ParseConfig.Model = "ks3000"
 	// 		deviceInfo.ParseConfig.Origin = "chirpstackv4"
 	// 		in.DeviceId = "019be702-190b-704e-ba39-dafbcfa73c02"
 
 	// case "":
-	// 		deviceInfo.ParseConfig.Vendor = "milesight"
+	// 		deviceInfo.ParseConfig.Vendor = "kron"
 	// 		deviceInfo.ParseConfig.Model = "ks3000"
 	// 		deviceInfo.ParseConfig.Origin = "chirpstackv4"
 	// 		in.DeviceId = "019be702-190b-73b3-a8dc-3830751b3bd8"
 
 	// case "":
-	// 		deviceInfo.ParseConfig.Vendor = "milesight"
+	// 		deviceInfo.ParseConfig.Vendor = "kron"
 	// 		deviceInfo.ParseConfig.Model = "ks3000"
 	// 		deviceInfo.ParseConfig.Origin = "chirpstackv4"
 	// 		in.DeviceId = "019be702-190b-78be-ad3f-599935f7745c"
@@ -289,7 +339,6 @@ func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequ
 		deviceInfo.ParseConfig.Model = "ws101"
 		deviceInfo.ParseConfig.Origin = "chirpstackv4"
 		in.DeviceId = "019b9ae3-337e-7fa0-9b72-3861f0e6c6bd"
-
 	}
 
 	// Check activation
@@ -307,17 +356,17 @@ func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequ
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("parse failed: %v", err))
 	}
-
 	parsedData.Tags["device_id"] = in.DeviceId
 
-	// Write to Redis Stream
-	streamKey := fmt.Sprintf("stream:{%s}:data", deviceInfo.TenantID)
-	if err := s.writeToRedisStream(ctx, streamKey, in.DeviceId, *parsedData); err != nil {
+	// Write to Redis Stream and Hash
+	// if err := s.sensorRealTimeWriter.WriteToRedis(ctx, *parsedData); err != nil {
+	if err := s.sensorRealTimeWriter.WriteToRedis(*parsedData); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to write: %v", err))
 	}
 
 	// Write to Influxdb3
-	if err := s.writeToInfluxdb3(ctx, *parsedData); err != nil {
+	// if err := s.sensorTimeSeriesWriter.WriteToInfluxdb3(ctx, *parsedData); err != nil {
+	if err := s.sensorTimeSeriesWriter.WriteToInfluxdb3(*parsedData); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to write: %v", err))
 	}
 
@@ -328,91 +377,485 @@ func (s *Server) IngestTelemetry(ctx context.Context, in *pb.IngestTelemetryRequ
 	}, nil
 }
 
-// func (s *Server) getDeviceInfo(ctx context.Context, deviceID string) (*DeviceInfo, error) {
-// 	key := fmt.Sprintf("device:%s", deviceID)
-// 	data, err := s.redis.Get(ctx, key).Result()
-// 	if err == redis.Nil {
-// 		return nil, fmt.Errorf("device not found")
-// 	} else if err != nil {
-// 		return nil, err
+// func (r *RedisEncoder) Encode(batch util.ParsedData) {
+// 	if len(batch) == 0 {
+// 		return nil
 // 	}
 
-// 	var deviceInfo DeviceInfo
-// 	if err := json.Unmarshal([]byte(data), &deviceInfo); err != nil {
-// 		return nil, err
+// 	deviceID := batch[0].Tags["device_id"]
+// 	tenantID := batch[0].Tags["tenant_id"]
+
+// 	const shardCount = 5
+// 	shardID := util.ShardForDevice(deviceID, shardCount)
+
+// 	streamKey := fmt.Sprintf("sensors:{%s}:%02d", tenantID, shardID)
+// 	lastKey := fmt.Sprintf("last:{%s}:%s", tenantID, deviceID)
+
+// 	pipe := s.redis.Pipeline()
+// 	now := time.Now().UnixNano()
+
+// 	for _, data := range batch {
+// 		sensorType := data.Tags["sensor_type"]
+// 		sensorValue := data.Fields["value"]
+
+// 		pipe.HSet(ctx, lastKey, map[string]any{
+// 			sensorType: sensorValue,
+// 			"ts":       now,
+// 		})
+
+// 		pipe.XAdd(ctx, &redis.XAddArgs{
+// 			Stream: streamKey,
+// 			MaxLen: 10000,
+// 			Approx: true,
+// 			Values: map[string]any{
+// 				"device": deviceID,
+// 				"type":   sensorType,
+// 				"value":  sensorValue,
+// 				"ts":     now,
+// 			},
+// 		})
 // 	}
 
-// 	return &deviceInfo, nil
+// 	_, err := pipe.Exec(ctx)
+// 	return err
+// 	r.count++
 // }
 
-// Optimized Redis stream write with pipelining
-func (s *Server) writeToRedisStream(ctx context.Context, streamKey, deviceID string, data util.ParsedData) error {
-	dataJSON := util.MarshalToJson(data)
+// func (w *SensorRealTimeWriter) ShouldFlush() bool {
+// 	return w.count >= w.maxCount ||
+// 		time.Since(w.lastFlush) > 10*time.Millisecond
+// }
 
-	if dataJSON == "" {
-		return fmt.Errorf("no data written to Redis, errors encountered. No fields were provided")
+func (w *SensorTimeSeriesWriter) batchData(batch *WriteBatcher, data util.ParsedData) {
+	// name: "sensor_data",
+	// tags: {
+	// 	device_id:019b08df-26e7-7866-a0fb-1768122b8584
+	// 	direction:uplink
+	// 	model:ks3000
+	// 	origin: mqtt
+	// 	vendor:kron
+	// },
+	// fields: {
+	// 	temperature=23.4,
+	// 	humidity=98,
+	// },
+	// Timestamp: 1770134069000000000,
+
+	ts := data.Timestamp
+
+	for sensorType, value := range data.Fields {
+		w.ToLineProtocol(
+			&batch.buf,
+			// data.Tags["sensor_id"],
+			data.Tags["device_id"],
+			// data.Tags["location"],
+			sensorType,
+			value,
+			ts,
+		)
+		batch.buf.WriteByte('\n')
+		batch.points++
+		// sensor_data,device_id=23a1,sensor_type=temperature value=23.4 1770134069000000000 \n
+		// sensor_data,device_id=23a1,sensor_type=humidity value=98 1770134069000000000 \n
+		// sensor_data,device_id=23a2,sensor_type=temperature value=23.4 1770134069000000001 \n
+
 	}
+}
 
-	pipe := s.redis.Pipeline()
+func (w *SensorRealTimeWriter) flushWithRetry(data util.ParsedData) error {
+	var ctx = context.Background()
+	// name: "sensor_data",
+	// tags: {
+	// 	device_id:019b08df-26e7-7866-a0fb-1768122b8584
+	// 	direction:uplink
+	// 	model:ks3000
+	// 	origin: mqtt
+	// 	vendor:kron
+	// },
+	// fields: {
+	// 	temperature=23.4,
+	// 	humidity=98,
+	// },
+	// Timestamp: 1770134069000000000,
 
-	values := map[string]interface{}{
-		"device_id": deviceID,
-		"data":      string(dataJSON), // Serialize as needed
-		"timestamp": time.Now().Unix(),
+	deviceID := data.Tags["device_id"]
+	tenantID := data.Tags["tenant_id"]
+
+	const shardCount = 5
+	shardID := util.ShardForDevice(deviceID, shardCount)
+
+	streamKey := fmt.Sprintf("sensors:{%s}:%02d", tenantID, shardID)
+	lastKey := fmt.Sprintf("last:{%s}:%s", tenantID, deviceID)
+
+	pipe := w.client.Pipeline()
+	now := time.Now().UnixNano()
+
+	//  parsed.fields array into many points
+	for sensorType, value := range data.Fields {
+
+		pipe.HSet(ctx, lastKey, map[string]any{
+			sensorType: value,
+			"ts":       now,
+		})
+
+		pipe.XAdd(ctx, &redis.XAddArgs{
+			Stream: streamKey,
+			MaxLen: 10000,
+			Approx: true,
+			Values: map[string]any{
+				"device": deviceID,
+				"type":   sensorType,
+				"value":  value,
+				"ts":     now,
+			},
+		})
 	}
-
-	pipe.XAdd(ctx, &redis.XAddArgs{
-		Stream: streamKey,
-		MaxLen: 10000, // Optional: limit stream size
-		Approx: true,
-		Values: values,
-	})
 
 	_, err := pipe.Exec(ctx)
-	fmt.Printf("\nMessage wrote to redis: %v\n", dataJSON)
-
 	return err
 }
 
-// func (s *Server) writeToRedisStream(ctx context.Context, streamKey, deviceID string, data util.ParsedData) error {
-// 	// dataJSON, _ := json.Marshal(data)
+// influxdb3 specific
+func (w *SensorTimeSeriesWriter) ToLineProtocol(
+	buf *bytes.Buffer,
+	// sensorID,
+	deviceID,
+	// location,
+	sensorType string,
+	value any,
+	ts uint64,
+) {
+	buf.WriteString(measurement)
 
-// 	_, err := s.redis.XAdd(ctx, &redis.XAddArgs{
-// 		Stream: streamKey,
-// 		Values: map[string]interface{}{
-// 			"device_id": deviceID,
-// 			"timestamp": time.Now().Unix(),
-// 			"data":      string(dataJSON),
-// 		},
-// 	}).Result()
+	// buf.WriteString(",sensor_id=")
+	// buf.WriteString(sensorID)
 
-// 	fmt.Printf("\nMessage wrote to redis: %v\n", dataJSON)
+	buf.WriteString(",device_id=")
+	buf.WriteString(deviceID)
 
+	// buf.WriteString(",location=")
+	// buf.WriteString(location)
+
+	buf.WriteString(",sensor_type=")
+	buf.WriteString(sensorType)
+
+	buf.WriteString(" value=")
+	switch v := value.(type) {
+	case string:
+		if sensorType == "data" {
+			buf.WriteString(`"`)
+			buf.WriteString(v)
+			buf.WriteString(`"`)
+		} else {
+			buf.WriteString(v)
+		}
+	case []byte:
+		if sensorType == "data" {
+			buf.WriteString(`"`)
+			buf.WriteString(hex.EncodeToString(v))
+			buf.WriteString(`"`)
+		} else {
+			buf.WriteString(hex.EncodeToString(v))
+		}
+	case float64:
+		buf.WriteString(strconv.FormatFloat(v, 'f', -1, 64))
+	case uint64:
+		buf.WriteString(strconv.FormatUint(v, 10))
+	case int64:
+		buf.WriteString(strconv.FormatInt(int64(v), 10))
+	}
+
+	buf.WriteByte(' ')
+	buf.Write(strconv.AppendUint(nil, ts, 10))
+
+	// buf.WriteByte('\n')
+}
+
+func (w *SensorTimeSeriesWriter) startInfluxWorkers(n int) {
+	for i := 0; i < n; i++ {
+		go w.influxWorker()
+	}
+}
+
+func (w *SensorRealTimeWriter) startRedisWorkers(n int) {
+	for i := 0; i < n; i++ {
+		go w.redisWorker()
+	}
+}
+
+// influxdb3 specific
+func (w *SensorTimeSeriesWriter) influxWorker() {
+	var batch WriteBatcher
+	batch.buf.Grow(maxBatchBytes)
+
+	flushTicker := time.NewTicker(500 * time.Millisecond)
+	defer flushTicker.Stop()
+
+	for {
+		select {
+		case data := <-w.queue:
+			// influxdb needs batch for one line string insert
+			// and buffer
+			w.batchData(&batch, data)
+			// batch is the array of batched points (buffer) to be flushed
+
+			// if batch.shouldFlush() {
+			// 	s.flushWithRetry(&batch)
+			// }
+			if w.shouldFlush() {
+				w.flushWithRetry(&batch)
+			}
+
+		case <-flushTicker.C:
+			w.flushWithRetry(&batch)
+		}
+	}
+}
+
+func (w *SensorRealTimeWriter) redisWorker() {
+
+	flushTicker := time.NewTicker(10 * time.Millisecond)
+	defer flushTicker.Stop()
+
+	for {
+		select {
+		case data := <-w.queue:
+			// encoder.Encode(data)
+
+			if err := w.flushWithRetry(data); err != nil {
+				// Handle error appropriately (e.g., log and possibly send to DLQ)
+				log.Printf("Failed to flush Redis data: %v", err)
+			}
+
+		case <-flushTicker.C:
+			return
+		}
+	}
+}
+
+func (w *SensorTimeSeriesWriter) flushWithRetry(batch *WriteBatcher) error {
+	if batch.points == 0 {
+		return fmt.Errorf("No data to flush")
+	}
+
+	payload := batch.buf.String()
+
+	backoff := 50 * time.Millisecond
+	for attempt := 0; attempt < 5; attempt++ {
+		err := w.client.Write(context.Background(), []byte(payload))
+		if err == nil {
+			w.reset()
+			return nil
+		}
+
+		time.Sleep(backoff)
+		backoff *= 2
+	}
+
+	// last resort: log + drop or push to DLQ
+	w.reset()
+	return fmt.Errorf("failed to write to InfluxDB after retries")
+}
+
+type DeviceInfo struct {
+	IsActive     bool               `json:"is_active"`
+	IsAuthorized bool               `json:"is_authorized"`
+	TenantID     string             `json:"tenant_id"`
+	TeamID       string             `json:"team_id"`
+	ParseConfig  parser.ParseConfig `json:"parse_config"`
+}
+
+// WritePoints -> addPoint + batch.append + batch.shouldFlush() + flushBatch -> Write to InfluxDB3
+// func (influx *InfluxEncoder) append(line string) {
+// 	influx.batch.buf.WriteString(line)
+// 	influx.batch.buf.WriteByte('\n')
+// 	influx.batch.points++
+// }
+
+func (w *SensorTimeSeriesWriter) shouldFlush() bool {
+	return w.batch.points >= maxBatchPoints || w.batch.buf.Len() >= maxBatchBytes
+}
+
+// func (w *SensorRealTimeWriter) shouldFlush() bool {
+// 	return w.batch.points >= maxBatchPoints || w.batch.buf.Len() >= maxBatchBytes
+// }
+
+func (w *SensorTimeSeriesWriter) reset() {
+	w.batch.buf.Reset()
+	w.batch.points = 0
+}
+
+// func (w *SensorRealTimeWriter) reset() {
+// 	w.batch.buf.Reset()
+// 	w.batch.points = 0
+// }
+
+// // influxdb3.addPoint
+// func (influx *InfluxEncoder) addPoint(sensorID, deviceID, location, sensorType string, value float64, ts int64) string {
+
+// 	// NOTE: escape tag values if needed
+// 	// 		If you’re doing >50k points/sec, replace fmt.Sprintf
+// 	// with manual strings.Builder writes (I can show that next).
+// 	return fmt.Sprintf(
+// 		"%s,sensor_id=%s,device_id=%s,location=%s,sensor_type=%s value=%f %d",
+// 		measurement,
+// 		sensorID,
+// 		deviceID,
+// 		location,
+// 		sensorType,
+// 		value,
+// 		ts,
+// 	)
+// }
+
+// func (influx *InfluxEncoder) flushBatch(ctx context.Context, influxdb3 *influxdb3.Client, batch *WriteBatcher) error {
+
+// 	if batch.points == 0 {
+// 		return nil
+// 	}
+// 	err := influxdb3.Write(ctx, batch.buf.Bytes())
+// 	batch.buf.Reset()
+// 	batch.points = 0
 // 	return err
 // }
 
-func (s *Server) writeToInfluxdb3(ctx context.Context, data util.ParsedData) error {
-	dataInflux := util.MarshalToInflux(data)
+// influxdb3.WritePoints
+// func (influx *InfluxEncoder) WritePoints(ctx context.Context, influxdb3 *influxdb3.Client, readings []SensorReading) error {
 
-	if dataInflux == "" {
-		return fmt.Errorf("no data written to Influxdb, errors encountered. No fields were provided")
+// 	var batch WriteBatcher
+
+// 	for _, r := range readings {
+// 		ts := r.Timestamp.UnixNano()
+
+// 		for sensorType, value := range r.Values {
+// 			line := addPoint(
+// 				r.SensorID,
+// 				r.DeviceID,
+// 				r.Location,
+// 				sensorType,
+// 				value,
+// 				ts,
+// 			)
+
+// 			batch.append(line)
+
+// 			if batch.shouldFlush() {
+// 				if err := flushBatch(ctx, influxdb3, &batch); err != nil {
+// 					return err
+// 				}
+// 			}
+// 		}
+// 	}
+
+// 	return flushBatch(ctx, influxdb3, &batch)
+// }
+
+// OUTPUT LAYER >>>>>>>>>>>>>>>>>>>
+// Optimized Redis stream write with pipelining
+// func (s *Server) writeBatchToRedisStream(
+// 	ctx context.Context,
+// 	batch util.ParsedData,
+// ) error {
+
+// 	if len(batch) == 0 {
+// 		return nil
+// 	}
+
+// 	deviceID := batch[0].Tags["device_id"]
+// 	tenantID := batch[0].Tags["tenant_id"]
+
+// 	const shardCount = 5
+// 	shardID := shardForDevice(deviceID, shardCount)
+
+// 	streamKey := fmt.Sprintf("sensors:{%s}:%02d", tenantID, shardID)
+// 	lastKey := fmt.Sprintf("last:{%s}:%s", tenantID, deviceID)
+
+// 	pipe := s.redis.Pipeline()
+// 	now := time.Now().UnixNano()
+
+// 	for _, data := range batch {
+// 		sensorType := data.Tags["sensor_type"]
+// 		sensorValue := data.Fields["value"]
+
+// 		pipe.HSet(ctx, lastKey, map[string]any{
+// 			sensorType: sensorValue,
+// 			"ts":       now,
+// 		})
+
+// 		pipe.XAdd(ctx, &redis.XAddArgs{
+// 			Stream: streamKey,
+// 			MaxLen: 10000,
+// 			Approx: true,
+// 			Values: map[string]any{
+// 				"device": deviceID,
+// 				"type":   sensorType,
+// 				"value":  sensorValue,
+// 				"ts":     now,
+// 			},
+// 		})
+// 	}
+
+// 	_, err := pipe.Exec(ctx)
+// 	return err
+// }
+
+// func (w *SensorTimeSeriesWriter) WriteToInfluxdb3(ctx context.Context, data util.ParsedData) error {
+func (w *SensorTimeSeriesWriter) WriteToInfluxdb3(data util.ParsedData) error {
+	fmt.Printf("\nMessage wrote to InfluxDB3: %v\n", data)
+	// Non-blocking enqueue with backpressure
+	select {
+	case w.queue <- data:
+		return nil
+	default:
+		return status.Error(codes.ResourceExhausted, "influx ingest queue full")
 	}
-
-	// err := s.influxdb3.Write(context.Background(), []byte(dataInflux))
-	err := s.influxdb3.Write(ctx, []byte(dataInflux))
-
-	if err != nil {
-		fmt.Printf("\nError writing to InfluxDB: %v", err)
-		return err
-	}
-
-	fmt.Printf("\nMessage wrote to influxdb3: %v", dataInflux)
-	fmt.Printf("\n--------------------------------------\n\n")
-
-	return err
 }
 
+// func (w *SensorRealTimeWriter) WriteToRedis(ctx context.Context, data util.ParsedData) error {
+func (w *SensorRealTimeWriter) WriteToRedis(data util.ParsedData) error {
+	fmt.Printf("\nMessage wrote to Redis: %v\n", data)
+	// Non-blocking enqueue with backpressure
+	select {
+	case w.queue <- data:
+		return nil
+	default:
+		return status.Error(codes.ResourceExhausted, "redis ingest queue full")
+	}
+}
+
+// OUTPUT LAYER <<<<<<<<<<<<<<<<<
+
+// CACHING LAYER >>>>>>>>>>>>>>>>>>>
 // Multi-tier caching: L1 (local) -> L2 (Redis) -> L3 (PostgreSQL)
+func (s *Server) validateDeviceInCacheOrDB(ctx context.Context, deviceID string) (bool, error) {
+	// 1. Check Redis first
+	val, err := s.redis.Get(ctx, "auth:"+deviceID).Result()
+	if err == nil {
+		valid := val == "true"
+		return valid, nil
+	}
+	if err != redis.Nil {
+		return false, err // Redis error
+	}
+
+	// // 2. Fallback to PostgreSQL
+	// valid, err := validateDeviceInDB(deviceID)
+	// if err != nil {
+	// 	return false, err
+	// }
+	// bypass:
+	valid := true
+
+	// 3. Cache result (even if false)
+	status := "false"
+	if valid {
+		status = "true"
+	}
+	s.redis.Set(ctx, "auth:"+deviceID, status, time.Hour)
+
+	return valid, nil
+}
+
 func (s *Server) getDeviceInfoCached(ctx context.Context, deviceID string) (*DeviceInfo, error) {
 	cacheKey := "device:" + deviceID
 
@@ -526,3 +969,5 @@ func (s *Server) InvalidateDeviceCache(ctx context.Context, deviceID string) err
 	// Remove from Redis
 	return s.redis.Del(ctx, cacheKey).Err()
 }
+
+// CACHING LAYER <<<<<<<<<<<<<<<<<

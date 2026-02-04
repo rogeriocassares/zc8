@@ -11,10 +11,11 @@ import (
 
 // ParseConfig defines how to parse device data
 type ParseConfig struct {
-	Direction string `json:"direction"`
-	Vendor    string `json:"vendor"`
-	Origin    string `json:"origin"`
-	Model     string `json:"model"`
+	Direction   string `json:"direction"`
+	Vendor      string `json:"vendor"`
+	Origin      string `json:"origin"`
+	Model       string `json:"model"`
+	Measurement string `json:"measurement"`
 }
 
 type Parser struct {
@@ -44,13 +45,20 @@ func GetParser(key string) (ParserFunc, bool) {
 func (p *Parser) Parse(config ParseConfig, data []byte) (*util.ParsedData, error) {
 
 	var pd = &util.ParsedData{
-		Name:      "",
-		Fields:    make(map[string]interface{}),
-		Tags:      make(map[string]interface{}),
+		Name: "",
+		// Fields:    make(map[string]interface{}),
+		Fields:    make(map[string]any),
+		Tags:      make(map[string]string),
 		Timestamp: uint64(time.Now().UnixNano()),
 	}
 
 	var err error
+
+	pd.Name = config.Measurement
+	pd.Tags["vendor"] = config.Vendor
+	pd.Tags["model"] = config.Model
+	pd.Tags["origin"] = config.Origin
+	pd.Tags["direction"] = config.Direction
 
 	switch config.Origin {
 	case "chirpstackv4":
@@ -59,7 +67,10 @@ func (p *Parser) Parse(config ParseConfig, data []byte) (*util.ParsedData, error
 			return nil, err
 		}
 	default:
+		// pd.Tags["sensor_type"] = "raw_data"
 		pd.Fields["data"] = data
+		pd.Tags["origin"] = "mqtt"
+
 		// return nil, fmt.Errorf("unsupported Transport: %s", config.Transport)
 	}
 
@@ -84,19 +95,15 @@ func (p *Parser) Parse(config ParseConfig, data []byte) (*util.ParsedData, error
 		return nil, err
 	}
 
-	// Merge Name
-	// pd.Name = dd.Name
-	pd.Name = config.Vendor + "_" + config.Model
-
 	// Merge Fields
-	for k, v := range dd.Fields {
-		pd.Fields[k] = v
+	if dd.Fields != nil {
+		pd.Fields = dd.Fields
 	}
 
 	// Merge Tags
 	if dd.Tags != nil {
 		if pd.Tags == nil {
-			pd.Tags = make(map[string]interface{})
+			pd.Tags = make(map[string]string)
 		}
 		for k, v := range dd.Tags {
 			pd.Tags[k] = v

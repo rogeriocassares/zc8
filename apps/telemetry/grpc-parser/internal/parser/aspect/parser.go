@@ -132,8 +132,8 @@ type Temperature8Point struct {
 func ParseAspectUplink(payload []byte, model string) (*util.ParsedData, error) {
 	dp := &util.ParsedData{
 		Name:   "",
-		Fields: make(map[string]interface{}),
-		Tags:   make(map[string]interface{}),
+		Fields: make(map[string]any),
+		Tags:   make(map[string]string),
 	}
 
 	var am19 AM19Message
@@ -150,15 +150,13 @@ func ParseAspectUplink(payload []byte, model string) (*util.ParsedData, error) {
 		smartLight.BatteryVoltage = float64(am19.X_0D_1) * 4.3 / 1000
 		smartLight.BoardVoltage = am19.X_0C
 
-		dp.Fields = map[string]interface{}{
-			"temperature":     smartLight.Temperature,
-			"humidity":        smartLight.Humidity,
-			"movementCounter": smartLight.MovementCounter,
-			"luminosity":      smartLight.Luminosity,
-			"batteryVoltage":  smartLight.BatteryVoltage,
-			"boardVoltage":    smartLight.BoardVoltage,
-			"data":            payload,
-		}
+		dp.Fields["temperature"] = util.FieldsValue{Key: "temperature", Value: smartLight.Temperature}
+		dp.Fields["humidity"] = util.FieldsValue{Key: "humidity", Value: smartLight.Humidity}
+		dp.Fields["movementCounter"] = util.FieldsValue{Key: "movementCounter", Value: smartLight.MovementCounter}
+		dp.Fields["luminosity"] = util.FieldsValue{Key: "luminosity", Value: smartLight.Luminosity}
+		dp.Fields["batteryVoltage"] = util.FieldsValue{Key: "batteryVoltage", Value: smartLight.BatteryVoltage}
+		dp.Fields["boardVoltage"] = util.FieldsValue{Key: "boardVoltage", Value: smartLight.BoardVoltage}
+		dp.Fields["data"] = util.FieldsValue{Key: "data", Value: payload}
 	}
 
 	return dp, nil
