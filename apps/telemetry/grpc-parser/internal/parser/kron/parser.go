@@ -76,7 +76,7 @@ func (r *KS3000) UnmarshalKS3000JSON(data []byte) error {
 }
 
 func ParseKronKS3000Uplink(payload []byte, model string) (*util.ParsedData, error) {
-	fmt.Printf("\n ### DecodeKronKS3000WiFi ###\n")
+	// fmt.Printf("\n ### DecodeKronKS3000WiFi ###\n")
 	dp := &util.ParsedData{
 		// Fields: make([]util.FieldsValue, 0, 12),
 		Fields: make(map[string]any),
@@ -110,32 +110,9 @@ func ParseKronKS3000Uplink(payload []byte, model string) (*util.ParsedData, erro
 		dp.Fields["a_minus"] = md.EAN
 		dp.Fields["q_minus"] = md.ERN
 		dp.Fields["error_code"] = md.CE
-		dp.Fields["created_at"] = uint64(time.Now().UnixNano())
+		// dp.Fields["created_at"] = uint64(time.Now().UnixNano())
 		dp.Fields["data"] = "<data_omitted>"
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "u_ll_avg", Value: md.U0})
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "i_avg", Value: md.I0})
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "frequency", Value: md.F1})
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "p_total", Value: md.P0})
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "q_total", Value: md.Q0})
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "power_factor", Value: md.FP0})
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "a_plus", Value: md.EA})
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "q_plus", Value: md.ER})
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "a_minus", Value: md.EAN})
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "q_minus", Value: md.ERN})
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "error_code", Value: md.CE})
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "created_at", Value: uint64(time.Now().UnixNano())})
-		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "data", Value: "<data_omitted>"})
-		// 	"p_total":      md.P0,
-		// 	"q_total":      md.Q0,
-		// 	"power_factor": md.FP0,
-		// 	"a_plus":       md.EA,
-		// 	"q_plus":       md.ER,
-		// 	"a_minus":      md.EAN,
-		// 	"q_minus":      md.ERN,
-		// 	"error_code":   md.CE,
-		// 	"created_at":   uint64(time.Now().UnixNano()),
-		// 	"data":         "<data_omitted>",
-		// }
+
 		dp.Tags = map[string]string{
 			// "variable": ks3000_metadata[0].Variable,
 		}
@@ -162,6 +139,6 @@ func ParseKronKS3000Uplink(payload []byte, model string) (*util.ParsedData, erro
 	} else {
 		// DECODE BINARY FROM LNS
 	}
-	fmt.Printf("\n########## dp KRON KS3000, %v\n", dp)
+	// fmt.Printf("\n########## dp KRON KS3000, %v\n", dp)
 	return dp, nil
 }

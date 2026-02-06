@@ -119,6 +119,58 @@ func MarshalToJson(msg ParsedData) string {
 // 	return string(sb.String())
 // }
 
+func EscapeTag(s string) string {
+	s = strings.ReplaceAll(s, " ", "\\ ")
+	s = strings.ReplaceAll(s, ",", "\\,")
+	s = strings.ReplaceAll(s, "=", "\\=")
+	return s
+}
+
+func EscapeStringValue(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	s = strings.ReplaceAll(s, "\r", "\\r")
+	s = strings.ReplaceAll(s, "\t", "\\t")
+	return s
+}
+
+// convertToString returns (dataType, stringValue)
+func ConvertToString(value interface{}) (string, string) {
+	switch v := value.(type) {
+	case float32:
+		return "float", strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case float64:
+		return "float", strconv.FormatFloat(v, 'f', -1, 64)
+	case int:
+		return "int", strconv.Itoa(v)
+	case int8:
+		return "int", strconv.FormatInt(int64(v), 10)
+	case int16:
+		return "int", strconv.FormatInt(int64(v), 10)
+	case int32:
+		return "int", strconv.FormatInt(int64(v), 10)
+	case int64:
+		return "int", strconv.FormatInt(v, 10)
+	case uint:
+		return "int", strconv.FormatUint(uint64(v), 10)
+	case uint8:
+		return "int", strconv.FormatUint(uint64(v), 10)
+	case uint16:
+		return "int", strconv.FormatUint(uint64(v), 10)
+	case uint32:
+		return "int", strconv.FormatUint(uint64(v), 10)
+	case uint64:
+		return "int", strconv.FormatUint(v, 10)
+	case bool:
+		return "bool", strconv.FormatBool(v)
+	case []byte:
+		return "byte", (hex.EncodeToString(v))
+	default:
+		return "string", fmt.Sprintf("%v", v)
+	}
+}
+
 func ShardForDevice(deviceID string, shardCount uint32) uint32 {
 	h := fnv.New32a()
 	h.Write([]byte(deviceID))

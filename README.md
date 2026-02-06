@@ -411,3 +411,29 @@ To publish packages to a private npm organization scope, **remove** the followin
 -  "access": "public"
 - },
 ```
+
+```sh
+
+device_id=019b08df-26e7-7506-a5f6-916b2bef24f4,sensor_type=i_avg value=2.54 1770327318000000000
+
+
+
+device_id=019b08df-26e7-7119-97da-523f9236db80,sensor_type=a_minus value=-1317.03 1770327329000000000
+
+
+
+device_id=019b08df-26e7-71b5-8df6-56c2e954ac91,sensor_type=u_ll_avg value=213.9 1770327345000000000
+
+
+
+device_id=019b08df-26e7-7506-a5f6-916b2bef24f4,sensor_type=i_avg value=2.54 1770327318000000000
+
+
+
+device_id=019b08df-26e7-7119-97da-523f9236db80,sensor_type=a_minus value=-1317.03 1770327329000000000
+
+
+
+device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=u_ll_avg value=223.53 1770327286000000000
+
+```
