@@ -67,6 +67,7 @@ import (
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/config"
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/grpcserver"
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/influxdb3"
+	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/nats"
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/redis"
 	pb "github.com/rogeriocassares/zc8/packages/proto/gen/go/telemetry/v1"
 
@@ -77,6 +78,10 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 
+	// NATS Core
+	natsClient := nats.NewClient(&cfg.Nats)
+	defer natsClient.Close()
+
 	// Initialize Redis
 	redisClient := redis.NewClient(&cfg.Redis)
 	defer redisClient.Close()
@@ -86,7 +91,7 @@ func main() {
 	defer influxdb3Client.Close()
 
 	// Create gRPC server
-	grpcServer := grpcserver.NewServer(redisClient, influxdb3Client)
+	grpcServer := grpcserver.NewServer(redisClient, influxdb3Client, natsClient)
 
 	// ✅ START THE WRITER BEFORE ACCEPTING REQUESTS
 	grpcServer.StartWriters()
@@ -100,7 +105,8 @@ func main() {
 	}
 
 	s := grpc.NewServer()
-	pb.RegisterTelemetryServiceServer(s, grpcServer)
+	// pb.RegisterTelemetryServiceServer(s, grpcServer) // old
+	pb.RegisterTelemetryIngestServiceServer(s, grpcServer)
 
 	// Start gRPC server in goroutine
 	go func() {

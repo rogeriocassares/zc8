@@ -23,29 +23,193 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type IngestTelemetryRequest struct {
+type IngestSource int32
+
+const (
+	IngestSource_SOURCE_UNSPECIFIED IngestSource = 0
+	IngestSource_SOURCE_MQTT        IngestSource = 1
+	IngestSource_SOURCE_GRPC        IngestSource = 2
+	IngestSource_SOURCE_CLI         IngestSource = 3
+)
+
+// Enum value maps for IngestSource.
+var (
+	IngestSource_name = map[int32]string{
+		0: "SOURCE_UNSPECIFIED",
+		1: "SOURCE_MQTT",
+		2: "SOURCE_GRPC",
+		3: "SOURCE_CLI",
+	}
+	IngestSource_value = map[string]int32{
+		"SOURCE_UNSPECIFIED": 0,
+		"SOURCE_MQTT":        1,
+		"SOURCE_GRPC":        2,
+		"SOURCE_CLI":         3,
+	}
+)
+
+func (x IngestSource) Enum() *IngestSource {
+	p := new(IngestSource)
+	*p = x
+	return p
+}
+
+func (x IngestSource) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (IngestSource) Descriptor() protoreflect.EnumDescriptor {
+	return file_telemetry_v1_telemetry_proto_enumTypes[0].Descriptor()
+}
+
+func (IngestSource) Type() protoreflect.EnumType {
+	return &file_telemetry_v1_telemetry_proto_enumTypes[0]
+}
+
+func (x IngestSource) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use IngestSource.Descriptor instead.
+func (IngestSource) EnumDescriptor() ([]byte, []int) {
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{0}
+}
+
+type IngestStatus int32
+
+const (
+	IngestStatus_INGEST_STATUS_UNSPECIFIED IngestStatus = 0
+	IngestStatus_INGEST_OK                 IngestStatus = 1
+	IngestStatus_INGEST_DUPLICATE          IngestStatus = 2
+	IngestStatus_INGEST_REJECTED           IngestStatus = 3
+	IngestStatus_INGEST_BACKPRESSURE       IngestStatus = 4
+	IngestStatus_INGEST_INVALID            IngestStatus = 5
+)
+
+// Enum value maps for IngestStatus.
+var (
+	IngestStatus_name = map[int32]string{
+		0: "INGEST_STATUS_UNSPECIFIED",
+		1: "INGEST_OK",
+		2: "INGEST_DUPLICATE",
+		3: "INGEST_REJECTED",
+		4: "INGEST_BACKPRESSURE",
+		5: "INGEST_INVALID",
+	}
+	IngestStatus_value = map[string]int32{
+		"INGEST_STATUS_UNSPECIFIED": 0,
+		"INGEST_OK":                 1,
+		"INGEST_DUPLICATE":          2,
+		"INGEST_REJECTED":           3,
+		"INGEST_BACKPRESSURE":       4,
+		"INGEST_INVALID":            5,
+	}
+)
+
+func (x IngestStatus) Enum() *IngestStatus {
+	p := new(IngestStatus)
+	*p = x
+	return p
+}
+
+func (x IngestStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (IngestStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_telemetry_v1_telemetry_proto_enumTypes[1].Descriptor()
+}
+
+func (IngestStatus) Type() protoreflect.EnumType {
+	return &file_telemetry_v1_telemetry_proto_enumTypes[1]
+}
+
+func (x IngestStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use IngestStatus.Descriptor instead.
+func (IngestStatus) EnumDescriptor() ([]byte, []int) {
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{1}
+}
+
+type DeviceStatus int32
+
+const (
+	DeviceStatus_UNKNOWN  DeviceStatus = 0
+	DeviceStatus_ONLINE   DeviceStatus = 1
+	DeviceStatus_OFFLINE  DeviceStatus = 2
+	DeviceStatus_DEGRADED DeviceStatus = 3
+)
+
+// Enum value maps for DeviceStatus.
+var (
+	DeviceStatus_name = map[int32]string{
+		0: "UNKNOWN",
+		1: "ONLINE",
+		2: "OFFLINE",
+		3: "DEGRADED",
+	}
+	DeviceStatus_value = map[string]int32{
+		"UNKNOWN":  0,
+		"ONLINE":   1,
+		"OFFLINE":  2,
+		"DEGRADED": 3,
+	}
+)
+
+func (x DeviceStatus) Enum() *DeviceStatus {
+	p := new(DeviceStatus)
+	*p = x
+	return p
+}
+
+func (x DeviceStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (DeviceStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_telemetry_v1_telemetry_proto_enumTypes[2].Descriptor()
+}
+
+func (DeviceStatus) Type() protoreflect.EnumType {
+	return &file_telemetry_v1_telemetry_proto_enumTypes[2]
+}
+
+func (x DeviceStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use DeviceStatus.Descriptor instead.
+func (DeviceStatus) EnumDescriptor() ([]byte, []int) {
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{2}
+}
+
+type IngestRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	DeviceId      string                 `protobuf:"bytes,1,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
-	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
-	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	EventId       string                 `protobuf:"bytes,1,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	DeviceId      string                 `protobuf:"bytes,2,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
+	Payload       []byte                 `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
+	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Source        IngestSource           `protobuf:"varint,5,opt,name=source,proto3,enum=zc8_telemetry_proto_v1.IngestSource" json:"source,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *IngestTelemetryRequest) Reset() {
-	*x = IngestTelemetryRequest{}
+func (x *IngestRequest) Reset() {
+	*x = IngestRequest{}
 	mi := &file_telemetry_v1_telemetry_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *IngestTelemetryRequest) String() string {
+func (x *IngestRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*IngestTelemetryRequest) ProtoMessage() {}
+func (*IngestRequest) ProtoMessage() {}
 
-func (x *IngestTelemetryRequest) ProtoReflect() protoreflect.Message {
+func (x *IngestRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_telemetry_v1_telemetry_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -57,55 +221,69 @@ func (x *IngestTelemetryRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use IngestTelemetryRequest.ProtoReflect.Descriptor instead.
-func (*IngestTelemetryRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use IngestRequest.ProtoReflect.Descriptor instead.
+func (*IngestRequest) Descriptor() ([]byte, []int) {
 	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *IngestTelemetryRequest) GetDeviceId() string {
+func (x *IngestRequest) GetEventId() string {
+	if x != nil {
+		return x.EventId
+	}
+	return ""
+}
+
+func (x *IngestRequest) GetDeviceId() string {
 	if x != nil {
 		return x.DeviceId
 	}
 	return ""
 }
 
-func (x *IngestTelemetryRequest) GetData() []byte {
+func (x *IngestRequest) GetPayload() []byte {
 	if x != nil {
-		return x.Data
+		return x.Payload
 	}
 	return nil
 }
 
-func (x *IngestTelemetryRequest) GetTimestamp() *timestamppb.Timestamp {
+func (x *IngestRequest) GetTimestamp() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Timestamp
 	}
 	return nil
 }
 
-type IngestTelemetryResponse struct {
+func (x *IngestRequest) GetSource() IngestSource {
+	if x != nil {
+		return x.Source
+	}
+	return IngestSource_SOURCE_UNSPECIFIED
+}
+
+type IngestResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	MessageId     string                 `protobuf:"bytes,2,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	Status        IngestStatus           `protobuf:"varint,1,opt,name=status,proto3,enum=zc8_telemetry_proto_v1.IngestStatus" json:"status,omitempty"`
+	EventId       string                 `protobuf:"bytes,2,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *IngestTelemetryResponse) Reset() {
-	*x = IngestTelemetryResponse{}
+func (x *IngestResponse) Reset() {
+	*x = IngestResponse{}
 	mi := &file_telemetry_v1_telemetry_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *IngestTelemetryResponse) String() string {
+func (x *IngestResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*IngestTelemetryResponse) ProtoMessage() {}
+func (*IngestResponse) ProtoMessage() {}
 
-func (x *IngestTelemetryResponse) ProtoReflect() protoreflect.Message {
+func (x *IngestResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_telemetry_v1_telemetry_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -117,61 +295,290 @@ func (x *IngestTelemetryResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use IngestTelemetryResponse.ProtoReflect.Descriptor instead.
-func (*IngestTelemetryResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use IngestResponse.ProtoReflect.Descriptor instead.
+func (*IngestResponse) Descriptor() ([]byte, []int) {
 	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *IngestTelemetryResponse) GetSuccess() bool {
+func (x *IngestResponse) GetStatus() IngestStatus {
 	if x != nil {
-		return x.Success
+		return x.Status
 	}
-	return false
+	return IngestStatus_INGEST_STATUS_UNSPECIFIED
 }
 
-func (x *IngestTelemetryResponse) GetMessageId() string {
+func (x *IngestResponse) GetEventId() string {
 	if x != nil {
-		return x.MessageId
+		return x.EventId
 	}
 	return ""
 }
 
-func (x *IngestTelemetryResponse) GetError() string {
+func (x *IngestResponse) GetReason() string {
 	if x != nil {
-		return x.Error
+		return x.Reason
 	}
 	return ""
+}
+
+// PROTOBUF OVER NATS SUBJECT DESIGN
+type TelemetryUpdate struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	EventId        string                 `protobuf:"bytes,1,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	OrganizationId string                 `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	DeviceId       string                 `protobuf:"bytes,3,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
+	Timestamp      *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"` // optional
+	SensorsValues  []*SensorValue         `protobuf:"bytes,5,rep,name=sensors_values,json=sensorsValues,proto3" json:"sensors_values,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *TelemetryUpdate) Reset() {
+	*x = TelemetryUpdate{}
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TelemetryUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TelemetryUpdate) ProtoMessage() {}
+
+func (x *TelemetryUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TelemetryUpdate.ProtoReflect.Descriptor instead.
+func (*TelemetryUpdate) Descriptor() ([]byte, []int) {
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *TelemetryUpdate) GetEventId() string {
+	if x != nil {
+		return x.EventId
+	}
+	return ""
+}
+
+func (x *TelemetryUpdate) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *TelemetryUpdate) GetDeviceId() string {
+	if x != nil {
+		return x.DeviceId
+	}
+	return ""
+}
+
+func (x *TelemetryUpdate) GetTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Timestamp
+	}
+	return nil
+}
+
+func (x *TelemetryUpdate) GetSensorsValues() []*SensorValue {
+	if x != nil {
+		return x.SensorsValues
+	}
+	return nil
+}
+
+type SensorValue struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SensorType    string                 `protobuf:"bytes,1,opt,name=sensor_type,json=sensorType,proto3" json:"sensor_type,omitempty"`
+	Value         float64                `protobuf:"fixed64,3,opt,name=value,proto3" json:"value,omitempty"`
+	Unit          string                 `protobuf:"bytes,4,opt,name=unit,proto3" json:"unit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SensorValue) Reset() {
+	*x = SensorValue{}
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SensorValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SensorValue) ProtoMessage() {}
+
+func (x *SensorValue) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SensorValue.ProtoReflect.Descriptor instead.
+func (*SensorValue) Descriptor() ([]byte, []int) {
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *SensorValue) GetSensorType() string {
+	if x != nil {
+		return x.SensorType
+	}
+	return ""
+}
+
+func (x *SensorValue) GetValue() float64 {
+	if x != nil {
+		return x.Value
+	}
+	return 0
+}
+
+func (x *SensorValue) GetUnit() string {
+	if x != nil {
+		return x.Unit
+	}
+	return ""
+}
+
+type DeviceState struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId  string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	DeviceId        string                 `protobuf:"bytes,2,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
+	Status          DeviceStatus           `protobuf:"varint,3,opt,name=status,proto3,enum=zc8_telemetry_proto_v1.DeviceStatus" json:"status,omitempty"`
+	LastSeen        int64                  `protobuf:"varint,4,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
+	FirmwareVersion string                 `protobuf:"bytes,5,opt,name=firmware_version,json=firmwareVersion,proto3" json:"firmware_version,omitempty"`
+	Sensors         []string               `protobuf:"bytes,6,rep,name=sensors,proto3" json:"sensors,omitempty"`
+	Metadata        map[string]string      `protobuf:"bytes,7,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *DeviceState) Reset() {
+	*x = DeviceState{}
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeviceState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeviceState) ProtoMessage() {}
+
+func (x *DeviceState) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeviceState.ProtoReflect.Descriptor instead.
+func (*DeviceState) Descriptor() ([]byte, []int) {
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *DeviceState) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *DeviceState) GetDeviceId() string {
+	if x != nil {
+		return x.DeviceId
+	}
+	return ""
+}
+
+func (x *DeviceState) GetStatus() DeviceStatus {
+	if x != nil {
+		return x.Status
+	}
+	return DeviceStatus_UNKNOWN
+}
+
+func (x *DeviceState) GetLastSeen() int64 {
+	if x != nil {
+		return x.LastSeen
+	}
+	return 0
+}
+
+func (x *DeviceState) GetFirmwareVersion() string {
+	if x != nil {
+		return x.FirmwareVersion
+	}
+	return ""
+}
+
+func (x *DeviceState) GetSensors() []string {
+	if x != nil {
+		return x.Sensors
+	}
+	return nil
+}
+
+func (x *DeviceState) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
 }
 
 // Embedded message for devices that support Protobuf
-type TelemetryData struct {
+type DeviceData struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Timestamp uint64                 `protobuf:"varint,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// Types that are valid to be assigned to Data:
 	//
-	//	*TelemetryData_Can
-	//	*TelemetryData_Imu
-	//	*TelemetryData_Gps
-	Data          isTelemetryData_Data `protobuf_oneof:"data"`
+	//	*DeviceData_Can
+	//	*DeviceData_Imu
+	//	*DeviceData_Gps
+	Data          isDeviceData_Data `protobuf_oneof:"data"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *TelemetryData) Reset() {
-	*x = TelemetryData{}
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[2]
+func (x *DeviceData) Reset() {
+	*x = DeviceData{}
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *TelemetryData) String() string {
+func (x *DeviceData) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*TelemetryData) ProtoMessage() {}
+func (*DeviceData) ProtoMessage() {}
 
-func (x *TelemetryData) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[2]
+func (x *DeviceData) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -182,75 +589,75 @@ func (x *TelemetryData) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use TelemetryData.ProtoReflect.Descriptor instead.
-func (*TelemetryData) Descriptor() ([]byte, []int) {
-	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{2}
+// Deprecated: Use DeviceData.ProtoReflect.Descriptor instead.
+func (*DeviceData) Descriptor() ([]byte, []int) {
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *TelemetryData) GetTimestamp() uint64 {
+func (x *DeviceData) GetTimestamp() uint64 {
 	if x != nil {
 		return x.Timestamp
 	}
 	return 0
 }
 
-func (x *TelemetryData) GetData() isTelemetryData_Data {
+func (x *DeviceData) GetData() isDeviceData_Data {
 	if x != nil {
 		return x.Data
 	}
 	return nil
 }
 
-func (x *TelemetryData) GetCan() *CANFrame {
+func (x *DeviceData) GetCan() *CAN {
 	if x != nil {
-		if x, ok := x.Data.(*TelemetryData_Can); ok {
+		if x, ok := x.Data.(*DeviceData_Can); ok {
 			return x.Can
 		}
 	}
 	return nil
 }
 
-func (x *TelemetryData) GetImu() *IMUData {
+func (x *DeviceData) GetImu() *IMU {
 	if x != nil {
-		if x, ok := x.Data.(*TelemetryData_Imu); ok {
+		if x, ok := x.Data.(*DeviceData_Imu); ok {
 			return x.Imu
 		}
 	}
 	return nil
 }
 
-func (x *TelemetryData) GetGps() *GPSData {
+func (x *DeviceData) GetGps() *GPS {
 	if x != nil {
-		if x, ok := x.Data.(*TelemetryData_Gps); ok {
+		if x, ok := x.Data.(*DeviceData_Gps); ok {
 			return x.Gps
 		}
 	}
 	return nil
 }
 
-type isTelemetryData_Data interface {
-	isTelemetryData_Data()
+type isDeviceData_Data interface {
+	isDeviceData_Data()
 }
 
-type TelemetryData_Can struct {
-	Can *CANFrame `protobuf:"bytes,2,opt,name=can,proto3,oneof"`
+type DeviceData_Can struct {
+	Can *CAN `protobuf:"bytes,2,opt,name=can,proto3,oneof"`
 }
 
-type TelemetryData_Imu struct {
-	Imu *IMUData `protobuf:"bytes,3,opt,name=imu,proto3,oneof"`
+type DeviceData_Imu struct {
+	Imu *IMU `protobuf:"bytes,3,opt,name=imu,proto3,oneof"`
 }
 
-type TelemetryData_Gps struct {
-	Gps *GPSData `protobuf:"bytes,4,opt,name=gps,proto3,oneof"`
+type DeviceData_Gps struct {
+	Gps *GPS `protobuf:"bytes,4,opt,name=gps,proto3,oneof"`
 }
 
-func (*TelemetryData_Can) isTelemetryData_Data() {}
+func (*DeviceData_Can) isDeviceData_Data() {}
 
-func (*TelemetryData_Imu) isTelemetryData_Data() {}
+func (*DeviceData_Imu) isDeviceData_Data() {}
 
-func (*TelemetryData_Gps) isTelemetryData_Data() {}
+func (*DeviceData_Gps) isDeviceData_Data() {}
 
-type CANFrame struct {
+type CAN struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"` // 8-byte CAN payload
@@ -258,21 +665,21 @@ type CANFrame struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CANFrame) Reset() {
-	*x = CANFrame{}
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[3]
+func (x *CAN) Reset() {
+	*x = CAN{}
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CANFrame) String() string {
+func (x *CAN) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CANFrame) ProtoMessage() {}
+func (*CAN) ProtoMessage() {}
 
-func (x *CANFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[3]
+func (x *CAN) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -283,26 +690,26 @@ func (x *CANFrame) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CANFrame.ProtoReflect.Descriptor instead.
-func (*CANFrame) Descriptor() ([]byte, []int) {
-	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{3}
+// Deprecated: Use CAN.ProtoReflect.Descriptor instead.
+func (*CAN) Descriptor() ([]byte, []int) {
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *CANFrame) GetId() uint32 {
+func (x *CAN) GetId() uint32 {
 	if x != nil {
 		return x.Id
 	}
 	return 0
 }
 
-func (x *CANFrame) GetData() []byte {
+func (x *CAN) GetData() []byte {
 	if x != nil {
 		return x.Data
 	}
 	return nil
 }
 
-type IMUData struct {
+type IMU struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ax            float32                `protobuf:"fixed32,1,opt,name=ax,proto3" json:"ax,omitempty"` // acceleration
 	Ay            float32                `protobuf:"fixed32,2,opt,name=ay,proto3" json:"ay,omitempty"`
@@ -317,21 +724,21 @@ type IMUData struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *IMUData) Reset() {
-	*x = IMUData{}
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[4]
+func (x *IMU) Reset() {
+	*x = IMU{}
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *IMUData) String() string {
+func (x *IMU) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*IMUData) ProtoMessage() {}
+func (*IMU) ProtoMessage() {}
 
-func (x *IMUData) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[4]
+func (x *IMU) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -342,75 +749,75 @@ func (x *IMUData) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use IMUData.ProtoReflect.Descriptor instead.
-func (*IMUData) Descriptor() ([]byte, []int) {
-	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{4}
+// Deprecated: Use IMU.ProtoReflect.Descriptor instead.
+func (*IMU) Descriptor() ([]byte, []int) {
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *IMUData) GetAx() float32 {
+func (x *IMU) GetAx() float32 {
 	if x != nil {
 		return x.Ax
 	}
 	return 0
 }
 
-func (x *IMUData) GetAy() float32 {
+func (x *IMU) GetAy() float32 {
 	if x != nil {
 		return x.Ay
 	}
 	return 0
 }
 
-func (x *IMUData) GetAz() float32 {
+func (x *IMU) GetAz() float32 {
 	if x != nil {
 		return x.Az
 	}
 	return 0
 }
 
-func (x *IMUData) GetGx() float32 {
+func (x *IMU) GetGx() float32 {
 	if x != nil {
 		return x.Gx
 	}
 	return 0
 }
 
-func (x *IMUData) GetGy() float32 {
+func (x *IMU) GetGy() float32 {
 	if x != nil {
 		return x.Gy
 	}
 	return 0
 }
 
-func (x *IMUData) GetGz() float32 {
+func (x *IMU) GetGz() float32 {
 	if x != nil {
 		return x.Gz
 	}
 	return 0
 }
 
-func (x *IMUData) GetR() float32 {
+func (x *IMU) GetR() float32 {
 	if x != nil {
 		return x.R
 	}
 	return 0
 }
 
-func (x *IMUData) GetP() float32 {
+func (x *IMU) GetP() float32 {
 	if x != nil {
 		return x.P
 	}
 	return 0
 }
 
-func (x *IMUData) GetY() float32 {
+func (x *IMU) GetY() float32 {
 	if x != nil {
 		return x.Y
 	}
 	return 0
 }
 
-type GPSData struct {
+type GPS struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Latitude      float64                `protobuf:"fixed64,1,opt,name=latitude,proto3" json:"latitude,omitempty"`
 	Longitude     float64                `protobuf:"fixed64,2,opt,name=longitude,proto3" json:"longitude,omitempty"`
@@ -420,21 +827,21 @@ type GPSData struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GPSData) Reset() {
-	*x = GPSData{}
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[5]
+func (x *GPS) Reset() {
+	*x = GPS{}
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GPSData) String() string {
+func (x *GPS) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GPSData) ProtoMessage() {}
+func (*GPS) ProtoMessage() {}
 
-func (x *GPSData) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[5]
+func (x *GPS) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -445,33 +852,33 @@ func (x *GPSData) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GPSData.ProtoReflect.Descriptor instead.
-func (*GPSData) Descriptor() ([]byte, []int) {
-	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{5}
+// Deprecated: Use GPS.ProtoReflect.Descriptor instead.
+func (*GPS) Descriptor() ([]byte, []int) {
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *GPSData) GetLatitude() float64 {
+func (x *GPS) GetLatitude() float64 {
 	if x != nil {
 		return x.Latitude
 	}
 	return 0
 }
 
-func (x *GPSData) GetLongitude() float64 {
+func (x *GPS) GetLongitude() float64 {
 	if x != nil {
 		return x.Longitude
 	}
 	return 0
 }
 
-func (x *GPSData) GetAltitude() float32 {
+func (x *GPS) GetAltitude() float32 {
 	if x != nil {
 		return x.Altitude
 	}
 	return 0
 }
 
-func (x *GPSData) GetSpeed() float32 {
+func (x *GPS) GetSpeed() float32 {
 	if x != nil {
 		return x.Speed
 	}
@@ -489,7 +896,7 @@ type SendCommandRequest struct {
 
 func (x *SendCommandRequest) Reset() {
 	*x = SendCommandRequest{}
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[6]
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -501,7 +908,7 @@ func (x *SendCommandRequest) String() string {
 func (*SendCommandRequest) ProtoMessage() {}
 
 func (x *SendCommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[6]
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -514,7 +921,7 @@ func (x *SendCommandRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendCommandRequest.ProtoReflect.Descriptor instead.
 func (*SendCommandRequest) Descriptor() ([]byte, []int) {
-	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{6}
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SendCommandRequest) GetDeviceId() string {
@@ -549,7 +956,7 @@ type SendCommandResponse struct {
 
 func (x *SendCommandResponse) Reset() {
 	*x = SendCommandResponse{}
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[7]
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -561,7 +968,7 @@ func (x *SendCommandResponse) String() string {
 func (*SendCommandResponse) ProtoMessage() {}
 
 func (x *SendCommandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[7]
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -574,7 +981,7 @@ func (x *SendCommandResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendCommandResponse.ProtoReflect.Descriptor instead.
 func (*SendCommandResponse) Descriptor() ([]byte, []int) {
-	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{7}
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SendCommandResponse) GetSuccess() bool {
@@ -609,7 +1016,7 @@ type AcknowledgeCommandRequest struct {
 
 func (x *AcknowledgeCommandRequest) Reset() {
 	*x = AcknowledgeCommandRequest{}
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[8]
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -621,7 +1028,7 @@ func (x *AcknowledgeCommandRequest) String() string {
 func (*AcknowledgeCommandRequest) ProtoMessage() {}
 
 func (x *AcknowledgeCommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[8]
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -634,7 +1041,7 @@ func (x *AcknowledgeCommandRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcknowledgeCommandRequest.ProtoReflect.Descriptor instead.
 func (*AcknowledgeCommandRequest) Descriptor() ([]byte, []int) {
-	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{8}
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *AcknowledgeCommandRequest) GetCommandId() string {
@@ -668,7 +1075,7 @@ type AcknowledgeCommandResponse struct {
 
 func (x *AcknowledgeCommandResponse) Reset() {
 	*x = AcknowledgeCommandResponse{}
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[9]
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -680,7 +1087,7 @@ func (x *AcknowledgeCommandResponse) String() string {
 func (*AcknowledgeCommandResponse) ProtoMessage() {}
 
 func (x *AcknowledgeCommandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_v1_telemetry_proto_msgTypes[9]
+	mi := &file_telemetry_v1_telemetry_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -693,7 +1100,7 @@ func (x *AcknowledgeCommandResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcknowledgeCommandResponse.ProtoReflect.Descriptor instead.
 func (*AcknowledgeCommandResponse) Descriptor() ([]byte, []int) {
-	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{9}
+	return file_telemetry_v1_telemetry_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *AcknowledgeCommandResponse) GetSuccess() bool {
@@ -714,26 +1121,50 @@ var File_telemetry_v1_telemetry_proto protoreflect.FileDescriptor
 
 const file_telemetry_v1_telemetry_proto_rawDesc = "" +
 	"\n" +
-	"\x1ctelemetry/v1/telemetry.proto\x12\x16zc8_telemetry_proto_v1\x1a\x19google/protobuf/any.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x83\x01\n" +
-	"\x16IngestTelemetryRequest\x12\x1b\n" +
-	"\tdevice_id\x18\x01 \x01(\tR\bdeviceId\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\x128\n" +
-	"\ttimestamp\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"h\n" +
-	"\x17IngestTelemetryResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1d\n" +
+	"\x1ctelemetry/v1/telemetry.proto\x12\x16zc8_telemetry_proto_v1\x1a\x19google/protobuf/any.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd9\x01\n" +
+	"\rIngestRequest\x12\x19\n" +
+	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12\x1b\n" +
+	"\tdevice_id\x18\x02 \x01(\tR\bdeviceId\x12\x18\n" +
+	"\apayload\x18\x03 \x01(\fR\apayload\x128\n" +
+	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12<\n" +
+	"\x06source\x18\x05 \x01(\x0e2$.zc8_telemetry_proto_v1.IngestSourceR\x06source\"\x81\x01\n" +
+	"\x0eIngestResponse\x12<\n" +
+	"\x06status\x18\x01 \x01(\x0e2$.zc8_telemetry_proto_v1.IngestStatusR\x06status\x12\x19\n" +
+	"\bevent_id\x18\x02 \x01(\tR\aeventId\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"\xf8\x01\n" +
+	"\x0fTelemetryUpdate\x12\x19\n" +
+	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12'\n" +
+	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12\x1b\n" +
+	"\tdevice_id\x18\x03 \x01(\tR\bdeviceId\x128\n" +
+	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12J\n" +
+	"\x0esensors_values\x18\x05 \x03(\v2#.zc8_telemetry_proto_v1.SensorValueR\rsensorsValues\"X\n" +
+	"\vSensorValue\x12\x1f\n" +
+	"\vsensor_type\x18\x01 \x01(\tR\n" +
+	"sensorType\x12\x14\n" +
+	"\x05value\x18\x03 \x01(\x01R\x05value\x12\x12\n" +
+	"\x04unit\x18\x04 \x01(\tR\x04unit\"\xff\x02\n" +
+	"\vDeviceState\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1b\n" +
+	"\tdevice_id\x18\x02 \x01(\tR\bdeviceId\x12<\n" +
+	"\x06status\x18\x03 \x01(\x0e2$.zc8_telemetry_proto_v1.DeviceStatusR\x06status\x12\x1b\n" +
+	"\tlast_seen\x18\x04 \x01(\x03R\blastSeen\x12)\n" +
+	"\x10firmware_version\x18\x05 \x01(\tR\x0ffirmwareVersion\x12\x18\n" +
+	"\asensors\x18\x06 \x03(\tR\asensors\x12M\n" +
+	"\bmetadata\x18\a \x03(\v21.zc8_telemetry_proto_v1.DeviceState.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc5\x01\n" +
 	"\n" +
-	"message_id\x18\x02 \x01(\tR\tmessageId\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\xd5\x01\n" +
-	"\rTelemetryData\x12\x1c\n" +
-	"\ttimestamp\x18\x01 \x01(\x04R\ttimestamp\x124\n" +
-	"\x03can\x18\x02 \x01(\v2 .zc8_telemetry_proto_v1.CANFrameH\x00R\x03can\x123\n" +
-	"\x03imu\x18\x03 \x01(\v2\x1f.zc8_telemetry_proto_v1.IMUDataH\x00R\x03imu\x123\n" +
-	"\x03gps\x18\x04 \x01(\v2\x1f.zc8_telemetry_proto_v1.GPSDataH\x00R\x03gpsB\x06\n" +
-	"\x04data\".\n" +
-	"\bCANFrame\x12\x0e\n" +
+	"DeviceData\x12\x1c\n" +
+	"\ttimestamp\x18\x01 \x01(\x04R\ttimestamp\x12/\n" +
+	"\x03can\x18\x02 \x01(\v2\x1b.zc8_telemetry_proto_v1.CANH\x00R\x03can\x12/\n" +
+	"\x03imu\x18\x03 \x01(\v2\x1b.zc8_telemetry_proto_v1.IMUH\x00R\x03imu\x12/\n" +
+	"\x03gps\x18\x04 \x01(\v2\x1b.zc8_telemetry_proto_v1.GPSH\x00R\x03gpsB\x06\n" +
+	"\x04data\")\n" +
+	"\x03CAN\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\"\x93\x01\n" +
-	"\aIMUData\x12\x0e\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\"\x8f\x01\n" +
+	"\x03IMU\x12\x0e\n" +
 	"\x02ax\x18\x01 \x01(\x02R\x02ax\x12\x0e\n" +
 	"\x02ay\x18\x02 \x01(\x02R\x02ay\x12\x0e\n" +
 	"\x02az\x18\x03 \x01(\x02R\x02az\x12\x0e\n" +
@@ -742,8 +1173,8 @@ const file_telemetry_v1_telemetry_proto_rawDesc = "" +
 	"\x02gz\x18\x06 \x01(\x02R\x02gz\x12\f\n" +
 	"\x01r\x18\a \x01(\x02R\x01r\x12\f\n" +
 	"\x01p\x18\b \x01(\x02R\x01p\x12\f\n" +
-	"\x01y\x18\t \x01(\x02R\x01y\"u\n" +
-	"\aGPSData\x12\x1a\n" +
+	"\x01y\x18\t \x01(\x02R\x01y\"q\n" +
+	"\x03GPS\x12\x1a\n" +
 	"\blatitude\x18\x01 \x01(\x01R\blatitude\x12\x1c\n" +
 	"\tlongitude\x18\x02 \x01(\x01R\tlongitude\x12\x1a\n" +
 	"\baltitude\x18\x03 \x01(\x02R\baltitude\x12\x14\n" +
@@ -765,10 +1196,29 @@ const file_telemetry_v1_telemetry_proto_rawDesc = "" +
 	"receivedAt\"P\n" +
 	"\x1aAcknowledgeCommandResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage2\xfc\x01\n" +
-	"\x10TelemetryService\x12r\n" +
-	"\x0fIngestTelemetry\x12..zc8_telemetry_proto_v1.IngestTelemetryRequest\x1a/.zc8_telemetry_proto_v1.IngestTelemetryResponse\x12t\n" +
-	"\x0fStreamTelemetry\x12..zc8_telemetry_proto_v1.IngestTelemetryRequest\x1a/.zc8_telemetry_proto_v1.IngestTelemetryResponse(\x012\xf5\x01\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage*X\n" +
+	"\fIngestSource\x12\x16\n" +
+	"\x12SOURCE_UNSPECIFIED\x10\x00\x12\x0f\n" +
+	"\vSOURCE_MQTT\x10\x01\x12\x0f\n" +
+	"\vSOURCE_GRPC\x10\x02\x12\x0e\n" +
+	"\n" +
+	"SOURCE_CLI\x10\x03*\x94\x01\n" +
+	"\fIngestStatus\x12\x1d\n" +
+	"\x19INGEST_STATUS_UNSPECIFIED\x10\x00\x12\r\n" +
+	"\tINGEST_OK\x10\x01\x12\x14\n" +
+	"\x10INGEST_DUPLICATE\x10\x02\x12\x13\n" +
+	"\x0fINGEST_REJECTED\x10\x03\x12\x17\n" +
+	"\x13INGEST_BACKPRESSURE\x10\x04\x12\x12\n" +
+	"\x0eINGEST_INVALID\x10\x05*B\n" +
+	"\fDeviceStatus\x12\v\n" +
+	"\aUNKNOWN\x10\x00\x12\n" +
+	"\n" +
+	"\x06ONLINE\x10\x01\x12\v\n" +
+	"\aOFFLINE\x10\x02\x12\f\n" +
+	"\bDEGRADED\x10\x032\xd2\x01\n" +
+	"\x16TelemetryIngestService\x12W\n" +
+	"\x06Ingest\x12%.zc8_telemetry_proto_v1.IngestRequest\x1a&.zc8_telemetry_proto_v1.IngestResponse\x12_\n" +
+	"\fIngestStream\x12%.zc8_telemetry_proto_v1.IngestRequest\x1a&.zc8_telemetry_proto_v1.IngestResponse(\x012\xf5\x01\n" +
 	"\x0eCommandService\x12f\n" +
 	"\vSendCommand\x12*.zc8_telemetry_proto_v1.SendCommandRequest\x1a+.zc8_telemetry_proto_v1.SendCommandResponse\x12{\n" +
 	"\x12AcknowledgeCommand\x121.zc8_telemetry_proto_v1.AcknowledgeCommandRequest\x1a2.zc8_telemetry_proto_v1.AcknowledgeCommandResponseB<Z:github.com/rogeriocassares/zc8/packages/proto/telemetry/v1b\x06proto3"
@@ -785,42 +1235,56 @@ func file_telemetry_v1_telemetry_proto_rawDescGZIP() []byte {
 	return file_telemetry_v1_telemetry_proto_rawDescData
 }
 
-var file_telemetry_v1_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_telemetry_v1_telemetry_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_telemetry_v1_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_telemetry_v1_telemetry_proto_goTypes = []any{
-	(*IngestTelemetryRequest)(nil),     // 0: zc8_telemetry_proto_v1.IngestTelemetryRequest
-	(*IngestTelemetryResponse)(nil),    // 1: zc8_telemetry_proto_v1.IngestTelemetryResponse
-	(*TelemetryData)(nil),              // 2: zc8_telemetry_proto_v1.TelemetryData
-	(*CANFrame)(nil),                   // 3: zc8_telemetry_proto_v1.CANFrame
-	(*IMUData)(nil),                    // 4: zc8_telemetry_proto_v1.IMUData
-	(*GPSData)(nil),                    // 5: zc8_telemetry_proto_v1.GPSData
-	(*SendCommandRequest)(nil),         // 6: zc8_telemetry_proto_v1.SendCommandRequest
-	(*SendCommandResponse)(nil),        // 7: zc8_telemetry_proto_v1.SendCommandResponse
-	(*AcknowledgeCommandRequest)(nil),  // 8: zc8_telemetry_proto_v1.AcknowledgeCommandRequest
-	(*AcknowledgeCommandResponse)(nil), // 9: zc8_telemetry_proto_v1.AcknowledgeCommandResponse
-	(*timestamppb.Timestamp)(nil),      // 10: google.protobuf.Timestamp
-	(*anypb.Any)(nil),                  // 11: google.protobuf.Any
+	(IngestSource)(0),                  // 0: zc8_telemetry_proto_v1.IngestSource
+	(IngestStatus)(0),                  // 1: zc8_telemetry_proto_v1.IngestStatus
+	(DeviceStatus)(0),                  // 2: zc8_telemetry_proto_v1.DeviceStatus
+	(*IngestRequest)(nil),              // 3: zc8_telemetry_proto_v1.IngestRequest
+	(*IngestResponse)(nil),             // 4: zc8_telemetry_proto_v1.IngestResponse
+	(*TelemetryUpdate)(nil),            // 5: zc8_telemetry_proto_v1.TelemetryUpdate
+	(*SensorValue)(nil),                // 6: zc8_telemetry_proto_v1.SensorValue
+	(*DeviceState)(nil),                // 7: zc8_telemetry_proto_v1.DeviceState
+	(*DeviceData)(nil),                 // 8: zc8_telemetry_proto_v1.DeviceData
+	(*CAN)(nil),                        // 9: zc8_telemetry_proto_v1.CAN
+	(*IMU)(nil),                        // 10: zc8_telemetry_proto_v1.IMU
+	(*GPS)(nil),                        // 11: zc8_telemetry_proto_v1.GPS
+	(*SendCommandRequest)(nil),         // 12: zc8_telemetry_proto_v1.SendCommandRequest
+	(*SendCommandResponse)(nil),        // 13: zc8_telemetry_proto_v1.SendCommandResponse
+	(*AcknowledgeCommandRequest)(nil),  // 14: zc8_telemetry_proto_v1.AcknowledgeCommandRequest
+	(*AcknowledgeCommandResponse)(nil), // 15: zc8_telemetry_proto_v1.AcknowledgeCommandResponse
+	nil,                                // 16: zc8_telemetry_proto_v1.DeviceState.MetadataEntry
+	(*timestamppb.Timestamp)(nil),      // 17: google.protobuf.Timestamp
+	(*anypb.Any)(nil),                  // 18: google.protobuf.Any
 }
 var file_telemetry_v1_telemetry_proto_depIdxs = []int32{
-	10, // 0: zc8_telemetry_proto_v1.IngestTelemetryRequest.timestamp:type_name -> google.protobuf.Timestamp
-	3,  // 1: zc8_telemetry_proto_v1.TelemetryData.can:type_name -> zc8_telemetry_proto_v1.CANFrame
-	4,  // 2: zc8_telemetry_proto_v1.TelemetryData.imu:type_name -> zc8_telemetry_proto_v1.IMUData
-	5,  // 3: zc8_telemetry_proto_v1.TelemetryData.gps:type_name -> zc8_telemetry_proto_v1.GPSData
-	11, // 4: zc8_telemetry_proto_v1.SendCommandRequest.command_data:type_name -> google.protobuf.Any
-	10, // 5: zc8_telemetry_proto_v1.SendCommandRequest.timestamp:type_name -> google.protobuf.Timestamp
-	10, // 6: zc8_telemetry_proto_v1.AcknowledgeCommandRequest.received_at:type_name -> google.protobuf.Timestamp
-	0,  // 7: zc8_telemetry_proto_v1.TelemetryService.IngestTelemetry:input_type -> zc8_telemetry_proto_v1.IngestTelemetryRequest
-	0,  // 8: zc8_telemetry_proto_v1.TelemetryService.StreamTelemetry:input_type -> zc8_telemetry_proto_v1.IngestTelemetryRequest
-	6,  // 9: zc8_telemetry_proto_v1.CommandService.SendCommand:input_type -> zc8_telemetry_proto_v1.SendCommandRequest
-	8,  // 10: zc8_telemetry_proto_v1.CommandService.AcknowledgeCommand:input_type -> zc8_telemetry_proto_v1.AcknowledgeCommandRequest
-	1,  // 11: zc8_telemetry_proto_v1.TelemetryService.IngestTelemetry:output_type -> zc8_telemetry_proto_v1.IngestTelemetryResponse
-	1,  // 12: zc8_telemetry_proto_v1.TelemetryService.StreamTelemetry:output_type -> zc8_telemetry_proto_v1.IngestTelemetryResponse
-	7,  // 13: zc8_telemetry_proto_v1.CommandService.SendCommand:output_type -> zc8_telemetry_proto_v1.SendCommandResponse
-	9,  // 14: zc8_telemetry_proto_v1.CommandService.AcknowledgeCommand:output_type -> zc8_telemetry_proto_v1.AcknowledgeCommandResponse
-	11, // [11:15] is the sub-list for method output_type
-	7,  // [7:11] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	17, // 0: zc8_telemetry_proto_v1.IngestRequest.timestamp:type_name -> google.protobuf.Timestamp
+	0,  // 1: zc8_telemetry_proto_v1.IngestRequest.source:type_name -> zc8_telemetry_proto_v1.IngestSource
+	1,  // 2: zc8_telemetry_proto_v1.IngestResponse.status:type_name -> zc8_telemetry_proto_v1.IngestStatus
+	17, // 3: zc8_telemetry_proto_v1.TelemetryUpdate.timestamp:type_name -> google.protobuf.Timestamp
+	6,  // 4: zc8_telemetry_proto_v1.TelemetryUpdate.sensors_values:type_name -> zc8_telemetry_proto_v1.SensorValue
+	2,  // 5: zc8_telemetry_proto_v1.DeviceState.status:type_name -> zc8_telemetry_proto_v1.DeviceStatus
+	16, // 6: zc8_telemetry_proto_v1.DeviceState.metadata:type_name -> zc8_telemetry_proto_v1.DeviceState.MetadataEntry
+	9,  // 7: zc8_telemetry_proto_v1.DeviceData.can:type_name -> zc8_telemetry_proto_v1.CAN
+	10, // 8: zc8_telemetry_proto_v1.DeviceData.imu:type_name -> zc8_telemetry_proto_v1.IMU
+	11, // 9: zc8_telemetry_proto_v1.DeviceData.gps:type_name -> zc8_telemetry_proto_v1.GPS
+	18, // 10: zc8_telemetry_proto_v1.SendCommandRequest.command_data:type_name -> google.protobuf.Any
+	17, // 11: zc8_telemetry_proto_v1.SendCommandRequest.timestamp:type_name -> google.protobuf.Timestamp
+	17, // 12: zc8_telemetry_proto_v1.AcknowledgeCommandRequest.received_at:type_name -> google.protobuf.Timestamp
+	3,  // 13: zc8_telemetry_proto_v1.TelemetryIngestService.Ingest:input_type -> zc8_telemetry_proto_v1.IngestRequest
+	3,  // 14: zc8_telemetry_proto_v1.TelemetryIngestService.IngestStream:input_type -> zc8_telemetry_proto_v1.IngestRequest
+	12, // 15: zc8_telemetry_proto_v1.CommandService.SendCommand:input_type -> zc8_telemetry_proto_v1.SendCommandRequest
+	14, // 16: zc8_telemetry_proto_v1.CommandService.AcknowledgeCommand:input_type -> zc8_telemetry_proto_v1.AcknowledgeCommandRequest
+	4,  // 17: zc8_telemetry_proto_v1.TelemetryIngestService.Ingest:output_type -> zc8_telemetry_proto_v1.IngestResponse
+	4,  // 18: zc8_telemetry_proto_v1.TelemetryIngestService.IngestStream:output_type -> zc8_telemetry_proto_v1.IngestResponse
+	13, // 19: zc8_telemetry_proto_v1.CommandService.SendCommand:output_type -> zc8_telemetry_proto_v1.SendCommandResponse
+	15, // 20: zc8_telemetry_proto_v1.CommandService.AcknowledgeCommand:output_type -> zc8_telemetry_proto_v1.AcknowledgeCommandResponse
+	17, // [17:21] is the sub-list for method output_type
+	13, // [13:17] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_telemetry_v1_telemetry_proto_init() }
@@ -828,23 +1292,24 @@ func file_telemetry_v1_telemetry_proto_init() {
 	if File_telemetry_v1_telemetry_proto != nil {
 		return
 	}
-	file_telemetry_v1_telemetry_proto_msgTypes[2].OneofWrappers = []any{
-		(*TelemetryData_Can)(nil),
-		(*TelemetryData_Imu)(nil),
-		(*TelemetryData_Gps)(nil),
+	file_telemetry_v1_telemetry_proto_msgTypes[5].OneofWrappers = []any{
+		(*DeviceData_Can)(nil),
+		(*DeviceData_Imu)(nil),
+		(*DeviceData_Gps)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_telemetry_v1_telemetry_proto_rawDesc), len(file_telemetry_v1_telemetry_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   10,
+			NumEnums:      3,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   2,
 		},
 		GoTypes:           file_telemetry_v1_telemetry_proto_goTypes,
 		DependencyIndexes: file_telemetry_v1_telemetry_proto_depIdxs,
+		EnumInfos:         file_telemetry_v1_telemetry_proto_enumTypes,
 		MessageInfos:      file_telemetry_v1_telemetry_proto_msgTypes,
 	}.Build()
 	File_telemetry_v1_telemetry_proto = out.File

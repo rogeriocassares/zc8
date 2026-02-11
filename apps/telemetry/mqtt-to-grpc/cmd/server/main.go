@@ -16,9 +16,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/rogeriocassares/zc8/apps/telemetry/mqtt-to-grpc/internal/config"
 	pb "github.com/rogeriocassares/zc8/packages/proto/gen/go/telemetry/v1"
+	"github.com/samborkent/uuidv7"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -41,13 +43,21 @@ type MQTTMessage struct {
 
 type GrpcClient struct {
 	conn   *grpc.ClientConn
-	client pb.TelemetryServiceClient
+	client pb.TelemetryIngestServiceClient
 
-	stream pb.TelemetryService_StreamTelemetryClient
+	stream pb.TelemetryIngestService_IngestStreamClient
 	ctx    context.Context
 	cancel context.CancelFunc
 
 	mu sync.Mutex
+}
+
+func uuidv7New() string {
+	return uuidv7.New().String()
+}
+
+func unixNano() *timestamppb.Timestamp {
+	return timestamppb.Now()
 }
 
 func (g *GrpcClient) ensureStreamLocked() error {
@@ -57,7 +67,7 @@ func (g *GrpcClient) ensureStreamLocked() error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	stream, err := g.client.StreamTelemetry(ctx)
+	stream, err := g.client.IngestStream(ctx)
 	if err != nil {
 		cancel()
 		return err
@@ -76,7 +86,7 @@ func (g *GrpcClient) ensureStream() error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	stream, err := g.client.StreamTelemetry(ctx)
+	stream, err := g.client.IngestStream(ctx)
 	if err != nil {
 		cancel()
 		return err
@@ -114,7 +124,7 @@ func main() {
 	}
 	defer grpcClient.Close()
 
-	mqttChan := make(chan *pb.IngestTelemetryRequest, channelBufferSize)
+	mqttChan := make(chan *pb.IngestRequest, channelBufferSize)
 
 	mqttClient := initMQTTClient(mqttChan)
 	defer mqttClient.Disconnect(250)
@@ -159,7 +169,7 @@ func initGrpcClient(addr string) (*GrpcClient, error) {
 		return nil, fmt.Errorf("failed to connect to gRPC server: %w", err)
 	}
 
-	client := pb.NewTelemetryServiceClient(conn)
+	client := pb.NewTelemetryIngestServiceClient(conn)
 	log.Printf("Connected to gRPC server at %s\n", addr)
 
 	return &GrpcClient{
@@ -168,7 +178,7 @@ func initGrpcClient(addr string) (*GrpcClient, error) {
 	}, nil
 }
 
-func initMQTTClient(mqttChan chan<- *pb.IngestTelemetryRequest) MQTT.Client {
+func initMQTTClient(mqttChan chan<- *pb.IngestRequest) MQTT.Client {
 	id := uuid.New().String()
 	mqttBroker := "tcp://mqtt.maua.br:1883"
 
@@ -214,20 +224,23 @@ func initMQTTClient(mqttChan chan<- *pb.IngestTelemetryRequest) MQTT.Client {
 	return client
 }
 
-func parseMQTTMessage(topic string, payload []byte) *pb.IngestTelemetryRequest {
+func parseMQTTMessage(topic string, payload []byte) *pb.IngestRequest {
 	parts := strings.Split(topic, "/")
 	var deviceId string
 	if len(parts) > 1 {
 		deviceId = parts[1]
 	}
-	itr := &pb.IngestTelemetryRequest{
-		DeviceId: deviceId,
-		Data:     payload,
+	itr := &pb.IngestRequest{
+		EventId:   uuidv7New(),
+		DeviceId:  deviceId,
+		Payload:   payload,
+		Timestamp: unixNano(),
+		Source:    pb.IngestSource_SOURCE_MQTT,
 	}
 	return itr
 }
 
-func grpcWorker(ctx context.Context, wg *sync.WaitGroup, workerID int, mqttChan <-chan *pb.IngestTelemetryRequest, grpcClient *GrpcClient) {
+func grpcWorker(ctx context.Context, wg *sync.WaitGroup, workerID int, mqttChan <-chan *pb.IngestRequest, grpcClient *GrpcClient) {
 	defer wg.Done()
 	log.Printf("gRPC Worker %d started and waiting for messages...", workerID)
 
@@ -247,7 +260,7 @@ func grpcWorker(ctx context.Context, wg *sync.WaitGroup, workerID int, mqttChan 
 	}
 }
 
-func processMessage(ctx context.Context, workerID int, msg *pb.IngestTelemetryRequest, grpcClient *GrpcClient) {
+func processMessage(ctx context.Context, workerID int, msg *pb.IngestRequest, grpcClient *GrpcClient) {
 	// Retry logic
 	var err error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
@@ -295,7 +308,7 @@ func (g *GrpcClient) Close() error {
 }
 
 func sendToGrpcClient(
-	msg *pb.IngestTelemetryRequest,
+	msg *pb.IngestRequest,
 	g *GrpcClient,
 ) error {
 
@@ -323,7 +336,7 @@ func sendToGrpcClient(
 	return nil
 }
 
-// func sendToGrpc(ctx context.Context, msg *pb.IngestTelemetryRequest, grpcClient *GrpcClient) error {
+// func sendToGrpc(ctx context.Context, msg *pb.IngestRequest, grpcClient *GrpcClient) error {
 // 	grpcCtx, cancel := context.WithTimeout(ctx, grpcTimeout)
 // 	defer cancel()
 
@@ -337,7 +350,7 @@ func sendToGrpcClient(
 // 		log.Fatal(err)
 // 	}
 
-// 	// response, err := client.IngestTelemetry(grpcCtx, &pb.IngestTelemetryRequest{
+// 	// response, err := client.IngestTelemetry(grpcCtx, &pb.IngestRequest{
 // 	// 	DeviceId: msg.DeviceId,
 // 	// 	Data:     msg.Data,
 // 	// })

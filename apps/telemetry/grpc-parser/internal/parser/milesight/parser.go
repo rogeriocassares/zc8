@@ -36,7 +36,7 @@ const (
 
 func ParseMilesightUplink(payload []byte, model string) (*util.ParsedData, error) {
 	dp := &util.ParsedData{
-		Name:   "",
+		// Name:   "",
 		Fields: make(map[string]any),
 		Tags:   make(map[string]string),
 	}

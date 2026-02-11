@@ -45,7 +45,7 @@ func GetParser(key string) (ParserFunc, bool) {
 func (p *Parser) Parse(config ParseConfig, data []byte) (*util.ParsedData, error) {
 
 	var pd = &util.ParsedData{
-		Name: "",
+		// Name: "",
 		// Fields:    make(map[string]interface{}),
 		Fields:    make(map[string]any),
 		Tags:      make(map[string]string),
@@ -54,7 +54,7 @@ func (p *Parser) Parse(config ParseConfig, data []byte) (*util.ParsedData, error
 
 	var err error
 
-	pd.Name = config.Measurement
+	// pd.Name = config.Measurement
 	pd.Tags["vendor"] = config.Vendor
 	pd.Tags["model"] = config.Model
 	pd.Tags["origin"] = config.Origin

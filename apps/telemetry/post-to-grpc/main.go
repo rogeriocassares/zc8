@@ -28,15 +28,15 @@ func main() {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
-	c := pb.NewTelemetryServiceClient(conn)
+	c := pb.NewTelemetryIngestServiceClient(conn)
 
 	// Contact the server and print out its response.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	r, err := c.IngestTelemetry(ctx, &pb.IngestTelemetryRequest{DeviceId: *name, Data: []byte("010203")})
+	r, err := c.Ingest(ctx, &pb.IngestRequest{DeviceId: *name, Payload: []byte("010203")})
 	if err != nil {
 		log.Fatalf("could not greet: %v", err)
 	}
-	log.Printf("Greeting: %v", r.GetSuccess())
+	log.Printf("Greeting: %v", r.Status)
 
 }

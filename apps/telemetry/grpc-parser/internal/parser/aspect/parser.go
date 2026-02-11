@@ -131,7 +131,7 @@ type Temperature8Point struct {
 
 func ParseAspectUplink(payload []byte, model string) (*util.ParsedData, error) {
 	dp := &util.ParsedData{
-		Name:   "",
+		// Name:   "",
 		Fields: make(map[string]any),
 		Tags:   make(map[string]string),
 	}

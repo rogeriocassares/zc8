@@ -48,6 +48,15 @@ services:
       - postgres_data:/var/lib/postgresql/data
       # - ./init-db:/docker-entrypoint-initdb.d  # Optional: initialization scripts
 
+  nats:
+    image: nats:2.12.4-alpine3.22
+    container_name: nats
+    restart: unless-stopped
+    command: "-m 8222"
+    ports:
+      - "4222:4222" # Client port
+      - "8222:8222" # Monitoring port
+
 volumes:
   postgres_data:
     driver: local

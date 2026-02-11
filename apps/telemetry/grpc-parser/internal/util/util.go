@@ -26,11 +26,9 @@ type ParseConfig struct {
 }
 
 type ParsedData struct {
-	Name string `json:"name"`
-	// Fields    map[string]interface{} `json:"fields"`
-	Fields    map[string]any    `json:"fields"`
-	Tags      map[string]string `json:"tags"`
-	Timestamp uint64            `json:"timestamp"`
+	Fields    map[string]any
+	Tags      map[string]string
+	Timestamp uint64
 }
 
 // type Output struct {
@@ -168,6 +166,41 @@ func ConvertToString(value interface{}) (string, string) {
 		return "byte", (hex.EncodeToString(v))
 	default:
 		return "string", fmt.Sprintf("%v", v)
+	}
+}
+
+func DiscoverType(value any) string {
+	switch value.(type) {
+	case float32:
+		return "float"
+	case float64:
+		return "float"
+	case int:
+		return "int"
+	case int8:
+		return "int"
+	case int16:
+		return "int"
+	case int32:
+		return "int"
+	case int64:
+		return "int"
+	case uint:
+		return "int"
+	case uint8:
+		return "int"
+	case uint16:
+		return "int"
+	case uint32:
+		return "int"
+	case uint64:
+		return "int"
+	case bool:
+		return "bool"
+	case []byte:
+		return "byte"
+	default:
+		return "string"
 	}
 }
 
