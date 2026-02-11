@@ -14,7 +14,10 @@ require (
 )
 
 require (
+	github.com/dombox/uuidv7 v1.0.0
 	github.com/eclipse/paho.mqtt.golang v1.5.1
+	github.com/flexstack/uuid v1.1.0
+	github.com/samborkent/uuidv7 v0.0.0-20231110121620-f2e19d87e48b
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect

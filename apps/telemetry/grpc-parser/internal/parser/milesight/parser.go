@@ -36,9 +36,9 @@ const (
 
 func ParseMilesightUplink(payload []byte, model string) (*util.ParsedData, error) {
 	dp := &util.ParsedData{
-		Name:   "",
-		Fields: make(map[string]interface{}),
-		Tags:   make(map[string]interface{}),
+		// Name:   "",
+		Fields: make(map[string]any),
+		Tags:   make(map[string]string),
 	}
 
 	for i := 0; i < len(payload); {
@@ -51,6 +51,8 @@ func ParseMilesightUplink(payload []byte, model string) (*util.ParsedData, error
 		switch chID {
 		case 0x01:
 			if chType == 0x75 && i < len(payload) {
+				// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "battery", Value: uint64(payload[i])})
+				// dp.Fields["battery"] = util.FieldsValue{Key: "battery", Value: uint64(payload[i])}
 				dp.Fields["battery"] = uint64(payload[i])
 				i++
 			}
@@ -60,6 +62,8 @@ func ParseMilesightUplink(payload []byte, model string) (*util.ParsedData, error
 				if i+1 < len(payload) {
 					fmt.Printf("\nHandle Temperature\n")
 					temperature := binary.LittleEndian.Uint16(payload[i : i+2])
+					// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "temperature", Value: float64(temperature) / 10})
+					// dp.Fields["temperature"] = util.FieldsValue{Key: "temperature", Value: float64(temperature) / 10}
 					dp.Fields["temperature"] = float64(temperature) / 10
 					i += 2
 				}
@@ -69,14 +73,25 @@ func ParseMilesightUplink(payload []byte, model string) (*util.ParsedData, error
 					v := binary.LittleEndian.Uint16(payload[i : i+2])
 					switch v {
 					case 0xffff:
+						// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "water_level_error", Value: uint64(ReadSensorStatusCollectionFailed)})
+						// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "water_level_error", Value: uint64(ReadSensorStatusCollectionFailed)})
+						// dp.Fields["water_level_error"] = util.FieldsValue{Key: "water_level_error", Value: uint64(ReadSensorStatusCollectionFailed)}
 						dp.Fields["water_level_error"] = uint64(ReadSensorStatusCollectionFailed)
 
 					case 0xfffd:
+						// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "water_level_error", Value: uint64(ReadSensorStatusOutOfRange)})
+						// dp.Fields["water_level_error"] = util.FieldsValue{Key: "water_level_error", Value: uint64(ReadSensorStatusOutOfRange)}
+						// dp.Fields["water_level_error"] = util.FieldsValue{Key: "water_level_error", Value: uint64(ReadSensorStatusOutOfRange)}
 						dp.Fields["water_level_error"] = uint64(ReadSensorStatusOutOfRange)
 
 					default:
+						// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "water_level", Value: float64(v) / 100.0})
+						// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "water_level_error", Value: uint64(ReadSensorStatusNoError)})
+						// dp.Fields["water_level"] = util.FieldsValue{Key: "water_level", Value: float64(v) / 100.0}
+						// dp.Fields["water_level_error"] = util.FieldsValue{Key: "water_level_error", Value: uint64(ReadSensorStatusNoError)}
 						dp.Fields["water_level"] = float64(v) / 100.0
 						dp.Fields["water_level_error"] = uint64(ReadSensorStatusNoError)
+
 					}
 					i += 2
 					continue
@@ -88,6 +103,8 @@ func ParseMilesightUplink(payload []byte, model string) (*util.ParsedData, error
 			case 0x68:
 				if i < len(payload) {
 					fmt.Printf("\nHandle Humidity\n")
+					// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "humidity", Value: float64(payload[i] / 2)})
+					// dp.Fields["humidity"] = util.FieldsValue{Key: "humidity", Value: float64(payload[i] / 2)}
 					dp.Fields["humidity"] = float64(payload[i] / 2)
 					i += 1
 				}
@@ -102,8 +119,10 @@ func ParseMilesightUplink(payload []byte, model string) (*util.ParsedData, error
 					_ = pulseConv
 					// IEEE-754 float32 pulse counter (little-endian)
 					raw := binary.LittleEndian.Uint32(payload[i+4 : i+8])
-					pulseCount := float64(math.Float32frombits(raw))
+					pulseCount := math.Float32frombits(raw)
+					// dp.Fields["pulse_count"] = util.FieldsValue{Key: "pulse_count", Value: pulseCount}
 					dp.Fields["pulse_count"] = pulseCount
+
 					i += 8
 				}
 			}
@@ -114,61 +133,69 @@ func ParseMilesightUplink(payload []byte, model string) (*util.ParsedData, error
 				if i < len(payload) {
 					switch payload[i] {
 					case 1:
+						// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "button_press", Value: uint64(ButtonPressShort)})
+						// dp.Fields["button_press"] = util.FieldsValue{Key: "button_press", Value: uint64(ButtonPressShort)}
 						dp.Fields["button_press"] = uint64(ButtonPressShort)
 					case 2:
+						// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "button_press", Value: uint64(ButtonPressLong)})
+						// dp.Fields["button_press"] = util.FieldsValue{Key: "button_press", Value: uint64(ButtonPressLong)}
 						dp.Fields["button_press"] = uint64(ButtonPressLong)
 					case 3:
+						// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "button_press", Value: uint64(ButtonPressDouble)})
+						// dp.Fields["button_press"] = util.FieldsValue{Key: "button_press", Value: uint64(ButtonPressDouble)}
 						dp.Fields["button_press"] = uint64(ButtonPressDouble)
 					default:
+						// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "button_press", Value: uint64(ButtonPressUnknown)})
+						// dp.Fields["button_press"] = util.FieldsValue{Key: "button_press", Value: uint64(ButtonPressUnknown)}
 						dp.Fields["button_press"] = uint64(ButtonPressUnknown)
+						i++
 					}
-					i++
+
+					// case 0x01:
+					// 	if i+1 < len(payload) {
+					// 		dp.Tags["protocol_version"] = fmt.Sprintf("%d.%d", payload[i], payload[i+1])
+					// 		i += 2
+					// 	}
+					// case 0x09:
+					// 	if i+1 < len(payload) {
+					// 		dp.Tags["hardware_version"] = fmt.Sprintf("%d.%d", payload[i], payload[i+1])
+					// 		i += 2
+					// 	}
+					// case 0x0a:
+					// 	if i+1 < len(payload) {
+					// 		dp.Tags["firmware_version"] = fmt.Sprintf("%d.%d", payload[i], payload[i+1])
+					// 		i += 2
+					// 	}
+					// case 0xff:
+					// 	if i+1 < len(payload) {
+					// 		dp.Fields["tsl"] = uint64(binary.LittleEndian.Uint16(payload[i:]))
+					// 		i += 2
+					// 	}
+					// case 0x08:
+					// 	if i+5 < len(payload) {
+					// 		dp.Tags["serial_number"] = fmt.Sprintf("%X", payload[i:i+6])
+					// 		i += 6
+					// 	}
+					// case 0x0f:
+					// 	if i < len(payload) {
+					// 		dp.Tags["lorawan_class"] = fmt.Sprintf("Class %c", 'A'+rune(payload[i]))
+					// 		i++
+					// 	}
+					// case 0xfe:
+					// 	if i < len(payload) {
+					// 		dp.Fields["reset_event"] = uint64(payload[i])
+					// 		i++
+					// 	}
+					// case 0x0b:
+					// 	if i < len(payload) {
+					// 		dp.Fields["device_status"] = uint64(payload[i])
+					// 		i++
+					// 	}
 				}
 
-				// case 0x01:
-				// 	if i+1 < len(payload) {
-				// 		dp.Tags["protocol_version"] = fmt.Sprintf("%d.%d", payload[i], payload[i+1])
-				// 		i += 2
-				// 	}
-				// case 0x09:
-				// 	if i+1 < len(payload) {
-				// 		dp.Tags["hardware_version"] = fmt.Sprintf("%d.%d", payload[i], payload[i+1])
-				// 		i += 2
-				// 	}
-				// case 0x0a:
-				// 	if i+1 < len(payload) {
-				// 		dp.Tags["firmware_version"] = fmt.Sprintf("%d.%d", payload[i], payload[i+1])
-				// 		i += 2
-				// 	}
-				// case 0xff:
-				// 	if i+1 < len(payload) {
-				// 		dp.Fields["tsl"] = uint64(binary.LittleEndian.Uint16(payload[i:]))
-				// 		i += 2
-				// 	}
-				// case 0x08:
-				// 	if i+5 < len(payload) {
-				// 		dp.Tags["serial_number"] = fmt.Sprintf("%X", payload[i:i+6])
-				// 		i += 6
-				// 	}
-				// case 0x0f:
-				// 	if i < len(payload) {
-				// 		dp.Tags["lorawan_class"] = fmt.Sprintf("Class %c", 'A'+rune(payload[i]))
-				// 		i++
-				// 	}
-				// case 0xfe:
-				// 	if i < len(payload) {
-				// 		dp.Fields["reset_event"] = uint64(payload[i])
-				// 		i++
-				// 	}
-				// case 0x0b:
-				// 	if i < len(payload) {
-				// 		dp.Fields["device_status"] = uint64(payload[i])
-				// 		i++
-				// 	}
 			}
-
 		}
-	}
 
+	}
 	return dp, nil
 }

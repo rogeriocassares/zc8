@@ -14,6 +14,7 @@ type Config struct {
 	Influxdb3  Influxdb3Config  `mapstructure:"influxdb3"`
 	Postgres   PostgresConfig   `mapstructure:"postgres"`
 	Redis      RedisConfig      `mapstructure:"redis"`
+	Nats       NatsConfig       `mapstructure:"nats"`
 }
 
 type GrpcServerConfig struct {
@@ -37,6 +38,13 @@ type RedisConfig struct {
 	DialTimeout  time.Duration
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
+}
+
+type NatsConfig struct {
+	Host     string
+	Port     string
+	Token    string
+	Database string
 }
 
 type PostgresConfig struct {
@@ -84,6 +92,10 @@ func Load() *Config {
 			Port:     getEnv("INFLUXDB3_PORT", "8181"),
 			Token:    getEnv("INFLUXDB3_TOKEN", "0.0.0.0"),
 			Database: getEnv("INFLUXDB3_DATABASE", "iot_rp40d"),
+		},
+		Nats: NatsConfig{
+			Host: getEnv("NATS_HOST", "localhost"),
+			Port: getEnv("NATS_PORT", "4222"),
 		},
 		Postgres: PostgresConfig{
 			Host:              getEnv("POSTGRES_HOST", ""),

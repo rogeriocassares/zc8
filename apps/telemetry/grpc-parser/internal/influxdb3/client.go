@@ -7,8 +7,6 @@ import (
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/config"
 )
 
-// var Client *influxdb3.Client
-
 func NewClient(cfg *config.Influxdb3Config) *influxdb3.Client {
 	addr := cfg.Host + ":" + cfg.Port
 
@@ -21,13 +19,13 @@ func NewClient(cfg *config.Influxdb3Config) *influxdb3.Client {
 	defer func(client *influxdb3.Client) {
 		err := client.Close()
 		if err != nil {
-			log.Fatal("Failed to connect to Redis:", err)
+			log.Fatal("Failed to close InfluxDB3 client:", err)
 			panic(err)
 		}
 	}(client)
 
 	if err != nil {
-		log.Fatal("Failed to connect to Redis:", err)
+		log.Fatal("Failed to connect to InfluxDB3:", err)
 	}
 
 	log.Println("Connected to Influxdb3 successfully")

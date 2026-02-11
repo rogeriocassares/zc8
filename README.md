@@ -411,3 +411,53 @@ To publish packages to a private npm organization scope, **remove** the followin
 -  "access": "public"
 - },
 ```
+
+```sh
+
+device_id=019b08df-26e7-7506-a5f6-916b2bef24f4,sensor_type=i_avg value=2.54 1770327318000000000
+
+
+
+device_id=019b08df-26e7-7119-97da-523f9236db80,sensor_type=a_minus value=-1317.03 1770327329000000000
+
+
+
+device_id=019b08df-26e7-71b5-8df6-56c2e954ac91,sensor_type=u_ll_avg value=213.9 1770327345000000000
+
+
+
+device_id=019b08df-26e7-7506-a5f6-916b2bef24f4,sensor_type=i_avg value=2.54 1770327318000000000
+
+
+
+device_id=019b08df-26e7-7119-97da-523f9236db80,sensor_type=a_minus value=-1317.03 1770327329000000000
+
+
+
+device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=u_ll_avg value=223.53 1770327286000000000
+
+```
+
+sensor_data,device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=a_plus,type=float value=1629.75 1770410749000000000
+sensor_data,device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=a_minus,type=float value=-188.45 1770410749000000000
+sensor_data,device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=q_minus,type=float value=-1418.69 1770410749000000000
+sensor_data,device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=data,type=string value="<data_omitted>" 1770410749000000000
+sensor_data,device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=u_ll_avg,type=float value=223.52 1770410749000000000
+sensor_data,device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=frequency,type=float value=60.04 1770410749000000000
+sensor_data,device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=p_total,type=float value=515.94 1770410749000000000
+sensor_data,device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=power_factor,type=float value=0.96 1770410749000000000
+sensor_data,device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=q_plus,type=float value=191.73 1770410749000000000
+sensor_data,device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=error_code,type=float value=0 1770410749000000000
+sensor_data,device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=i_avg,type=float value=1.39 1770410749000000000
+sensor_data,device_id=019b08df-26e7-7866-a0fb-1768122b8584,sensor_type=q_total,type=float value=-153.15 1770410749000000000
+
+TODO:
+Generate event_id in boundaries: ok
+MQTT-to-gRPC bridge ok
+gRPC CLI ingestion
+Edge gateway
+
+Update Proto in code ok
+
+Write telemetry_ingest with raw, org, device, event
+raw_payload

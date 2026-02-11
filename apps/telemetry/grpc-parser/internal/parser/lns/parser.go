@@ -29,11 +29,12 @@ type LnsUp struct {
 }
 
 func ParseLns(origin string, message []byte) (*util.ParsedData, error) {
+
 	var lnsUp LnsUp
 	var err error
 	var dp = &util.ParsedData{
-		Fields: make(map[string]interface{}),
-		Tags:   make(map[string]interface{}),
+		Fields: make(map[string]any),
+		Tags:   make(map[string]string),
 	}
 	// var lnsAtcUp LnsAtcUp
 	var lnsChirpStackV4Up LnsChirpStackV4Up
@@ -42,7 +43,6 @@ func ParseLns(origin string, message []byte) (*util.ParsedData, error) {
 	case "chirpstackv4":
 		// if direction == "up" {
 		json.Unmarshal([]byte(message), &lnsChirpStackV4Up)
-		// fmt.Printf("\nmessage from chirpstackv4 parseLns %s", message)
 
 		lnsUp.DevEUI = lnsChirpStackV4Up.DeviceInfo.DevEui
 		lnsUp.RxInfoMac_0 = lnsChirpStackV4Up.RxInfo[0].GatewayId
@@ -65,28 +65,13 @@ func ParseLns(origin string, message []byte) (*util.ParsedData, error) {
 	}
 
 	dp.Tags["dev_eui"] = lnsUp.DevEUI
-	dp.Tags["rx_mac_0"] = lnsUp.RxInfoMac_0
-	dp.Tags["tx_modulation"] = lnsUp.TxInfoModulation
-	dp.Fields["tx_frequency"] = lnsUp.TxInfoFrequency
-	dp.Fields["tx_band_width"] = lnsUp.TxInfoBandWidth
-	dp.Fields["tx_spread_factor"] = lnsUp.TxInfoSpreadFactor
-	dp.Fields["rx_rssi_0"] = lnsUp.RxInfoRssi_0
-	dp.Fields["rx_snr_0"] = lnsUp.RxInfoSnr_0
-	dp.Fields["rx_lat_0"] = lnsUp.RxInfoLat_0
-	dp.Fields["rx_lon_0"] = lnsUp.RxInfoLon_0
-	dp.Fields["rx_alt_0"] = lnsUp.RxInfoAlt_0
-	dp.Fields["f_port"] = lnsUp.FPort
-	dp.Fields["f_cnt"] = lnsUp.FCnt
 
-	dp.Fields["data"], err = util.Base64ToByte(lnsUp.Data)
+	data, err := util.Base64ToByte(lnsUp.Data)
 	if err != nil {
 		fmt.Printf("Error decoding base64 data: %v", err)
 	}
-
-	// dp.Fields["data"] = util.HexToBytes(lnsUp.Data)
+	dp.Fields["data"] = data
 
 	dp.Timestamp = uint64(lnsUp.RxInfoTime_0)
-
-	fmt.Printf("\n============= dp: %v\n", dp)
 	return dp, nil
 }

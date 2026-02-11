@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"math"
 	"strconv"
 	"strings"
@@ -25,18 +26,18 @@ type ParseConfig struct {
 }
 
 type ParsedData struct {
-	Name      string                 `json:"name"`
-	Fields    map[string]interface{} `json:"fields"`
-	Tags      map[string]interface{} `json:"tags"`
-	Timestamp uint64                 `json:"timestamp"`
+	Fields    map[string]any
+	Tags      map[string]string
+	Timestamp uint64
 }
 
-type Output struct {
-	Name      string                 `json:"name"`
-	Fields    map[string]interface{} `json:"fields"`
-	Tags      map[string]interface{} `json:"tags"`
-	Timestamp uint64                 `json:"timestamp"`
-}
+// type Output struct {
+// 	Name string `json:"name"`
+// 	// Fields    map[string]interface{} `json:"fields"`
+// 	Field     interface{}            `json:"field"`
+// 	Tags      map[string]interface{} `json:"tags"`
+// 	Timestamp uint64                 `json:"timestamp"`
+// }
 
 // Message type 1: Data payload with dynamic metadata
 type DataMessage struct {
@@ -52,6 +53,11 @@ type LogMessage struct {
 	Msg   string `json:"msg"`
 }
 
+type FieldsValue struct {
+	Key   string
+	Value any
+}
+
 // MessageType enum
 type MessageType int
 
@@ -61,6 +67,15 @@ const (
 	MessageTypeLog
 )
 
+// AddField appends a field only if the value is non-nil.
+func AddField(fields *[]FieldsValue, key string, value any) {
+	if value != nil {
+		*fields = append(*fields, FieldsValue{
+			Key:   key,
+			Value: value,
+		})
+	}
+}
 func IsJSONArray(data []byte) bool {
 	trimmed := bytes.TrimLeft(data, " \t\r\n")
 	return len(trimmed) > 0 && trimmed[0] == '['
@@ -79,18 +94,120 @@ func MarshalToJson(msg ParsedData) string {
 	return string(outputMsgJson[:])
 }
 
-func MarshalToInflux(msg ParsedData) string {
-	var sb strings.Builder
-	sb.WriteString(msg.Name)
-	sb.WriteString(",")
-	sb.WriteString(MapToCommaString(msg.Tags))
-	sb.WriteString(" ")
-	sb.WriteString(MapToCommaString(msg.Fields))
-	sb.WriteString(" ")
-	sb.WriteString(strconv.FormatUint(uint64(msg.Timestamp), 10))
+// func MarshalToInflux(msg ParsedData) string {
+// 	var sb strings.Builder
+// 	// REVIEWME: change to map for fields
+// 	strField := ""
+// 	for _, f := range msg.Fields {
+// 		if strField != "" {
+// 			strField += ","
+// 		}
+// 		// strField += fmt.Sprintf("%s=%g", f.Key, f.Value)
+// 	}
+// 	sb.WriteString(msg.Name)
+// 	sb.WriteString(",")
+// 	// sb.WriteString(MapToCommaString(msg.Tags))
+// 	sb.WriteString(" ")
+// 	// sb.WriteString(MapToCommaString(msg.Fields))
+// 	sb.WriteString(strField)
+// 	sb.WriteString(" ")
+// 	sb.WriteString(strconv.FormatUint(uint64(msg.Timestamp), 10))
 
-	// fmt.Printf("MarshalToInflux: %s", sb.String())
-	return string(sb.String())
+// 	// fmt.Printf("MarshalToInflux: %s", sb.String())
+// 	return string(sb.String())
+// }
+
+func EscapeTag(s string) string {
+	s = strings.ReplaceAll(s, " ", "\\ ")
+	s = strings.ReplaceAll(s, ",", "\\,")
+	s = strings.ReplaceAll(s, "=", "\\=")
+	return s
+}
+
+func EscapeStringValue(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	s = strings.ReplaceAll(s, "\r", "\\r")
+	s = strings.ReplaceAll(s, "\t", "\\t")
+	return s
+}
+
+// convertToString returns (dataType, stringValue)
+func ConvertToString(value interface{}) (string, string) {
+	switch v := value.(type) {
+	case float32:
+		return "float", strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case float64:
+		return "float", strconv.FormatFloat(v, 'f', -1, 64)
+	case int:
+		return "int", strconv.Itoa(v)
+	case int8:
+		return "int", strconv.FormatInt(int64(v), 10)
+	case int16:
+		return "int", strconv.FormatInt(int64(v), 10)
+	case int32:
+		return "int", strconv.FormatInt(int64(v), 10)
+	case int64:
+		return "int", strconv.FormatInt(v, 10)
+	case uint:
+		return "int", strconv.FormatUint(uint64(v), 10)
+	case uint8:
+		return "int", strconv.FormatUint(uint64(v), 10)
+	case uint16:
+		return "int", strconv.FormatUint(uint64(v), 10)
+	case uint32:
+		return "int", strconv.FormatUint(uint64(v), 10)
+	case uint64:
+		return "int", strconv.FormatUint(v, 10)
+	case bool:
+		return "bool", strconv.FormatBool(v)
+	case []byte:
+		return "byte", (hex.EncodeToString(v))
+	default:
+		return "string", fmt.Sprintf("%v", v)
+	}
+}
+
+func DiscoverType(value any) string {
+	switch value.(type) {
+	case float32:
+		return "float"
+	case float64:
+		return "float"
+	case int:
+		return "int"
+	case int8:
+		return "int"
+	case int16:
+		return "int"
+	case int32:
+		return "int"
+	case int64:
+		return "int"
+	case uint:
+		return "int"
+	case uint8:
+		return "int"
+	case uint16:
+		return "int"
+	case uint32:
+		return "int"
+	case uint64:
+		return "int"
+	case bool:
+		return "bool"
+	case []byte:
+		return "byte"
+	default:
+		return "string"
+	}
+}
+
+func ShardForDevice(deviceID string, shardCount uint32) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(deviceID))
+	return h.Sum32() % shardCount
 }
 
 func MapToCommaString(m map[string]interface{}) string {
@@ -205,9 +322,9 @@ func getInt(m map[string]interface{}, key string) (int, bool) {
 
 // Process metadata dynamically
 func ProcessMetadata(metadata map[string]interface{}) {
-	fmt.Println("    Metadata fields:")
+	fmt.Println("    Metadata field:")
 
-	// Print all fields dynamically
+	// Print all field dynamically
 	for key, value := range metadata {
 		switch v := value.(type) {
 		case float64:

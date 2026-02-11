@@ -3,7 +3,6 @@ package kron
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/rogeriocassares/zc8/apps/telemetry/grpc-parser/internal/parser"
@@ -29,6 +28,15 @@ type KS3000_Metadata struct {
 	Time     string             `json:"time"`
 	Metadata KS3000_Metadata_IM `json:"metadata"`
 }
+
+// measurement: sensor_data
+// tags:
+//   sensor_id
+//   sensor_type        (temperature, pressure, vibration, etc)
+//   device_id
+//   location
+// fields:
+//   value              (float)
 
 type KS3000_Metadata_IM struct {
 	U0  float64 `json:"U0"`
@@ -68,10 +76,11 @@ func (r *KS3000) UnmarshalKS3000JSON(data []byte) error {
 }
 
 func ParseKronKS3000Uplink(payload []byte, model string) (*util.ParsedData, error) {
-	fmt.Printf("\n ### DecodeKronKS3000WiFi ###\n")
+	// fmt.Printf("\n ### DecodeKronKS3000WiFi ###\n")
 	dp := &util.ParsedData{
-		Fields: make(map[string]interface{}),
-		Tags:   make(map[string]interface{}),
+		// Fields: make([]util.FieldsValue, 0, 12),
+		Fields: make(map[string]any),
+		Tags:   make(map[string]string),
 	}
 
 	if util.IsJSONArray(payload) {
@@ -82,56 +91,54 @@ func ParseKronKS3000Uplink(payload []byte, model string) (*util.ParsedData, erro
 		if len(ks3000_metadata) == 0 {
 			return nil, fmt.Errorf("empty metadata array")
 		}
-		// Use the first element's embedded metadata IM
-		im := ks3000_metadata[0].Metadata
+		// Use the first element's embedded metadata md
+		md := ks3000_metadata[0].Metadata
 		ts, err := time.Parse("2006-01-02 15:04:05", ks3000_metadata[0].Time)
 		if err != nil {
 			fmt.Println("Error parsing time:", err)
 			return nil, err
 		}
 
-		dp.Fields = map[string]interface{}{
-			"u_ll_avg":     im.U0,
-			"i_avg":        im.I0,
-			"frequency":    im.F1,
-			"p_total":      im.P0,
-			"q_total":      im.Q0,
-			"power_factor": im.FP0,
-			"a_plus":       im.EA,
-			"q_plus":       im.ER,
-			"a_minus":      im.EAN,
-			"q_minus":      im.ERN,
-			"error_code":   im.CE,
-			"created_at":   uint64(time.Now().UnixNano()),
-			"data":         "<data_omitted>",
-		}
-		dp.Tags = map[string]interface{}{
+		dp.Fields["u_ll_avg"] = md.U0
+		dp.Fields["i_avg"] = md.I0
+		dp.Fields["frequency"] = md.F1
+		dp.Fields["p_total"] = md.P0
+		dp.Fields["q_total"] = md.Q0
+		dp.Fields["power_factor"] = md.FP0
+		dp.Fields["a_plus"] = md.EA
+		dp.Fields["q_plus"] = md.ER
+		dp.Fields["a_minus"] = md.EAN
+		dp.Fields["q_minus"] = md.ERN
+		dp.Fields["error_code"] = md.CE
+		// dp.Fields["created_at"] = uint64(time.Now().UnixNano())
+		dp.Fields["data"] = "<data_omitted>"
+
+		dp.Tags = map[string]string{
 			// "variable": ks3000_metadata[0].Variable,
 		}
 		dp.Timestamp = uint64(ts.UnixNano())
 
 	} else if util.IsJSONObject(payload) {
 		// payload = "eyJwYXJhbSI6ImxvZyIsIklEIjoiMjUxNTExNCIsIm1zZyI6IktTLTMwMDAgdjQuODpFMjU1In0"
-		var ks3000_stats KS3000
-		if err := json.Unmarshal(payload, &ks3000_stats); err != nil {
-			return nil, err
-		}
-		var sbMsg strings.Builder
-		// sbMsg.WriteString(`'`)
-		sbMsg.WriteString(ks3000_stats.Msg)
-		// sbMsg.WriteString(`'`)
-		dp.Name = "ks3000_stats"
-		dp.Fields = map[string]interface{}{
-			"msg": sbMsg.String(),
-		}
+		// var ks3000_stats KS3000
+		// if err := json.Unmarshal(payload, &ks3000_stats); err != nil {
+		// 	return nil, err
+		// }
+		// var sbMsg strings.Builder
+		// // sbMsg.WriteString(`'`)
+		// sbMsg.WriteString(ks3000_stats.Msg)
+		// // sbMsg.WriteString(`'`)
+		// dp.Tags["sensor_type"] = "ks3000_stats"
+		// dp.Fields = append(dp.Fields, util.FieldsValue{Key: "msg", Value: sbMsg.String()})
 
-		dp.Tags = map[string]interface{}{
-			"device_id": ks3000_stats.Id,
-			"params":    ks3000_stats.Param,
-		}
+		// dp.Tags = map[string]interface{}{
+		// 	"device_id": ks3000_stats.Id,
+		// 	"params":    ks3000_stats.Param,
+		// }
 
 	} else {
 		// DECODE BINARY FROM LNS
 	}
+	// fmt.Printf("\n########## dp KRON KS3000, %v\n", dp)
 	return dp, nil
 }

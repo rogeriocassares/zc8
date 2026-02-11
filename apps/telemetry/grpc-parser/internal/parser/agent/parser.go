@@ -15,12 +15,10 @@ func init() {
 func ParsePingUplink(payload []byte, model string) (*util.ParsedData, error) {
 	// payload = "64 bytes from 8.8.8.8: icmp_seq=7 ttl=118 time=9.666 ms"
 	dp := &util.ParsedData{
-		Fields: make(map[string]interface{}),
+		Fields: make(map[string]any),
 	}
 
-	dp.Fields = map[string]interface{}{
-		"data": payload,
-	}
+	dp.Fields["data"] = payload
 
 	return dp, nil
 }
@@ -28,23 +26,19 @@ func ParsePingUplink(payload []byte, model string) (*util.ParsedData, error) {
 func ParseStorioUplink(payload []byte, model string) (*util.ParsedData, error) {
 	// payload = "log"
 	dp := &util.ParsedData{
-		Fields: make(map[string]interface{}),
+		Fields: make(map[string]any),
 	}
 
-	dp.Fields = map[string]interface{}{
-		"data": payload,
-	}
+	dp.Fields["data"] = payload
 	return dp, nil
 }
 
 func ParseStorioDownlink(payload []byte, model string) (*util.ParsedData, error) {
 	// payload = `{"dir":"/home/a", "cache":"256"}`
 	dp := &util.ParsedData{
-		Fields: make(map[string]interface{}),
+		Fields: make(map[string]any),
 	}
 
-	dp.Fields = map[string]interface{}{
-		"data": payload,
-	}
+	dp.Fields["data"] = payload
 	return dp, nil
 }

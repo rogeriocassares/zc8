@@ -19,133 +19,142 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TelemetryService_IngestTelemetry_FullMethodName = "/zc8_telemetry_proto_v1.TelemetryService/IngestTelemetry"
-	TelemetryService_StreamTelemetry_FullMethodName = "/zc8_telemetry_proto_v1.TelemetryService/StreamTelemetry"
+	TelemetryIngestService_Ingest_FullMethodName       = "/zc8_telemetry_proto_v1.TelemetryIngestService/Ingest"
+	TelemetryIngestService_IngestStream_FullMethodName = "/zc8_telemetry_proto_v1.TelemetryIngestService/IngestStream"
 )
 
-// TelemetryServiceClient is the client API for TelemetryService service.
+// TelemetryIngestServiceClient is the client API for TelemetryIngestService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type TelemetryServiceClient interface {
-	IngestTelemetry(ctx context.Context, in *IngestTelemetryRequest, opts ...grpc.CallOption) (*IngestTelemetryResponse, error)
-	StreamTelemetry(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[IngestTelemetryRequest, IngestTelemetryResponse], error)
+//
+// TelemetryIngestService provides RPCs for ingesting telemetry data from devices.
+type TelemetryIngestServiceClient interface {
+	// Ingest accepts a single ingest request and returns a response with the ingest status.
+	Ingest(ctx context.Context, in *IngestRequest, opts ...grpc.CallOption) (*IngestResponse, error)
+	// IngestStream accepts a stream of ingest requests and returns a single response.
+	IngestStream(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[IngestRequest, IngestResponse], error)
 }
 
-type telemetryServiceClient struct {
+type telemetryIngestServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewTelemetryServiceClient(cc grpc.ClientConnInterface) TelemetryServiceClient {
-	return &telemetryServiceClient{cc}
+func NewTelemetryIngestServiceClient(cc grpc.ClientConnInterface) TelemetryIngestServiceClient {
+	return &telemetryIngestServiceClient{cc}
 }
 
-func (c *telemetryServiceClient) IngestTelemetry(ctx context.Context, in *IngestTelemetryRequest, opts ...grpc.CallOption) (*IngestTelemetryResponse, error) {
+func (c *telemetryIngestServiceClient) Ingest(ctx context.Context, in *IngestRequest, opts ...grpc.CallOption) (*IngestResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(IngestTelemetryResponse)
-	err := c.cc.Invoke(ctx, TelemetryService_IngestTelemetry_FullMethodName, in, out, cOpts...)
+	out := new(IngestResponse)
+	err := c.cc.Invoke(ctx, TelemetryIngestService_Ingest_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *telemetryServiceClient) StreamTelemetry(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[IngestTelemetryRequest, IngestTelemetryResponse], error) {
+func (c *telemetryIngestServiceClient) IngestStream(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[IngestRequest, IngestResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TelemetryService_ServiceDesc.Streams[0], TelemetryService_StreamTelemetry_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &TelemetryIngestService_ServiceDesc.Streams[0], TelemetryIngestService_IngestStream_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[IngestTelemetryRequest, IngestTelemetryResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[IngestRequest, IngestResponse]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TelemetryService_StreamTelemetryClient = grpc.ClientStreamingClient[IngestTelemetryRequest, IngestTelemetryResponse]
+type TelemetryIngestService_IngestStreamClient = grpc.ClientStreamingClient[IngestRequest, IngestResponse]
 
-// TelemetryServiceServer is the server API for TelemetryService service.
-// All implementations must embed UnimplementedTelemetryServiceServer
+// TelemetryIngestServiceServer is the server API for TelemetryIngestService service.
+// All implementations must embed UnimplementedTelemetryIngestServiceServer
 // for forward compatibility.
-type TelemetryServiceServer interface {
-	IngestTelemetry(context.Context, *IngestTelemetryRequest) (*IngestTelemetryResponse, error)
-	StreamTelemetry(grpc.ClientStreamingServer[IngestTelemetryRequest, IngestTelemetryResponse]) error
-	mustEmbedUnimplementedTelemetryServiceServer()
+//
+// TelemetryIngestService provides RPCs for ingesting telemetry data from devices.
+type TelemetryIngestServiceServer interface {
+	// Ingest accepts a single ingest request and returns a response with the ingest status.
+	Ingest(context.Context, *IngestRequest) (*IngestResponse, error)
+	// IngestStream accepts a stream of ingest requests and returns a single response.
+	IngestStream(grpc.ClientStreamingServer[IngestRequest, IngestResponse]) error
+	mustEmbedUnimplementedTelemetryIngestServiceServer()
 }
 
-// UnimplementedTelemetryServiceServer must be embedded to have
+// UnimplementedTelemetryIngestServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedTelemetryServiceServer struct{}
+type UnimplementedTelemetryIngestServiceServer struct{}
 
-func (UnimplementedTelemetryServiceServer) IngestTelemetry(context.Context, *IngestTelemetryRequest) (*IngestTelemetryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method IngestTelemetry not implemented")
+func (UnimplementedTelemetryIngestServiceServer) Ingest(context.Context, *IngestRequest) (*IngestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Ingest not implemented")
 }
-func (UnimplementedTelemetryServiceServer) StreamTelemetry(grpc.ClientStreamingServer[IngestTelemetryRequest, IngestTelemetryResponse]) error {
-	return status.Error(codes.Unimplemented, "method StreamTelemetry not implemented")
+func (UnimplementedTelemetryIngestServiceServer) IngestStream(grpc.ClientStreamingServer[IngestRequest, IngestResponse]) error {
+	return status.Error(codes.Unimplemented, "method IngestStream not implemented")
 }
-func (UnimplementedTelemetryServiceServer) mustEmbedUnimplementedTelemetryServiceServer() {}
-func (UnimplementedTelemetryServiceServer) testEmbeddedByValue()                          {}
+func (UnimplementedTelemetryIngestServiceServer) mustEmbedUnimplementedTelemetryIngestServiceServer() {
+}
+func (UnimplementedTelemetryIngestServiceServer) testEmbeddedByValue() {}
 
-// UnsafeTelemetryServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to TelemetryServiceServer will
+// UnsafeTelemetryIngestServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to TelemetryIngestServiceServer will
 // result in compilation errors.
-type UnsafeTelemetryServiceServer interface {
-	mustEmbedUnimplementedTelemetryServiceServer()
+type UnsafeTelemetryIngestServiceServer interface {
+	mustEmbedUnimplementedTelemetryIngestServiceServer()
 }
 
-func RegisterTelemetryServiceServer(s grpc.ServiceRegistrar, srv TelemetryServiceServer) {
-	// If the following call panics, it indicates UnimplementedTelemetryServiceServer was
+func RegisterTelemetryIngestServiceServer(s grpc.ServiceRegistrar, srv TelemetryIngestServiceServer) {
+	// If the following call panics, it indicates UnimplementedTelemetryIngestServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&TelemetryService_ServiceDesc, srv)
+	s.RegisterService(&TelemetryIngestService_ServiceDesc, srv)
 }
 
-func _TelemetryService_IngestTelemetry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(IngestTelemetryRequest)
+func _TelemetryIngestService_Ingest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IngestRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TelemetryServiceServer).IngestTelemetry(ctx, in)
+		return srv.(TelemetryIngestServiceServer).Ingest(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: TelemetryService_IngestTelemetry_FullMethodName,
+		FullMethod: TelemetryIngestService_Ingest_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TelemetryServiceServer).IngestTelemetry(ctx, req.(*IngestTelemetryRequest))
+		return srv.(TelemetryIngestServiceServer).Ingest(ctx, req.(*IngestRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TelemetryService_StreamTelemetry_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TelemetryServiceServer).StreamTelemetry(&grpc.GenericServerStream[IngestTelemetryRequest, IngestTelemetryResponse]{ServerStream: stream})
+func _TelemetryIngestService_IngestStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TelemetryIngestServiceServer).IngestStream(&grpc.GenericServerStream[IngestRequest, IngestResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TelemetryService_StreamTelemetryServer = grpc.ClientStreamingServer[IngestTelemetryRequest, IngestTelemetryResponse]
+type TelemetryIngestService_IngestStreamServer = grpc.ClientStreamingServer[IngestRequest, IngestResponse]
 
-// TelemetryService_ServiceDesc is the grpc.ServiceDesc for TelemetryService service.
+// TelemetryIngestService_ServiceDesc is the grpc.ServiceDesc for TelemetryIngestService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var TelemetryService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "zc8_telemetry_proto_v1.TelemetryService",
-	HandlerType: (*TelemetryServiceServer)(nil),
+var TelemetryIngestService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "zc8_telemetry_proto_v1.TelemetryIngestService",
+	HandlerType: (*TelemetryIngestServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "IngestTelemetry",
-			Handler:    _TelemetryService_IngestTelemetry_Handler,
+			MethodName: "Ingest",
+			Handler:    _TelemetryIngestService_Ingest_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "StreamTelemetry",
-			Handler:       _TelemetryService_StreamTelemetry_Handler,
+			StreamName:    "IngestStream",
+			Handler:       _TelemetryIngestService_IngestStream_Handler,
 			ClientStreams: true,
 		},
 	},
@@ -160,8 +169,12 @@ const (
 // CommandServiceClient is the client API for CommandService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// CommandService provides RPCs for sending commands to devices.
 type CommandServiceClient interface {
+	// SendCommand sends a command to a device and returns the command ID.
 	SendCommand(ctx context.Context, in *SendCommandRequest, opts ...grpc.CallOption) (*SendCommandResponse, error)
+	// AcknowledgeCommand acknowledges receipt of a command on the device.
 	AcknowledgeCommand(ctx context.Context, in *AcknowledgeCommandRequest, opts ...grpc.CallOption) (*AcknowledgeCommandResponse, error)
 }
 
@@ -196,8 +209,12 @@ func (c *commandServiceClient) AcknowledgeCommand(ctx context.Context, in *Ackno
 // CommandServiceServer is the server API for CommandService service.
 // All implementations must embed UnimplementedCommandServiceServer
 // for forward compatibility.
+//
+// CommandService provides RPCs for sending commands to devices.
 type CommandServiceServer interface {
+	// SendCommand sends a command to a device and returns the command ID.
 	SendCommand(context.Context, *SendCommandRequest) (*SendCommandResponse, error)
+	// AcknowledgeCommand acknowledges receipt of a command on the device.
 	AcknowledgeCommand(context.Context, *AcknowledgeCommandRequest) (*AcknowledgeCommandResponse, error)
 	mustEmbedUnimplementedCommandServiceServer()
 }

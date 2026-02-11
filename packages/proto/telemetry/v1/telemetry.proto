@@ -7,47 +7,108 @@ package zc8_telemetry_proto_v1;
 import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
-service TelemetryService {
-  rpc IngestTelemetry(IngestTelemetryRequest) returns (IngestTelemetryResponse);
-  rpc StreamTelemetry(stream IngestTelemetryRequest)
-      returns (IngestTelemetryResponse);
+// TelemetryIngestService provides RPCs for ingesting telemetry data from devices.
+service TelemetryIngestService {
+  // Ingest accepts a single ingest request and returns a response with the ingest status.
+  rpc Ingest(IngestRequest) returns (IngestResponse);
+  // IngestStream accepts a stream of ingest requests and returns a single response.
+  rpc IngestStream(stream IngestRequest) returns (IngestResponse);
 }
 
+// CommandService provides RPCs for sending commands to devices.
 service CommandService {
+  // SendCommand sends a command to a device and returns the command ID.
   rpc SendCommand(SendCommandRequest) returns (SendCommandResponse);
+  // AcknowledgeCommand acknowledges receipt of a command on the device.
   rpc AcknowledgeCommand(AcknowledgeCommandRequest)
       returns (AcknowledgeCommandResponse);
 }
 
-message IngestTelemetryRequest {
-  string device_id = 1;
-  bytes data = 2;
-  google.protobuf.Timestamp timestamp = 3;
+enum IngestSource {
+  SOURCE_UNSPECIFIED = 0;
+  SOURCE_MQTT = 1;
+  SOURCE_GRPC = 2;
+  SOURCE_CLI = 3;
 }
 
-message IngestTelemetryResponse {
-  bool success = 1;
-  string message_id = 2;
-  string error = 3;
+enum IngestStatus {
+  INGEST_STATUS_UNSPECIFIED = 0;
+  INGEST_OK = 1;
+  INGEST_DUPLICATE = 2;
+  INGEST_REJECTED = 3;
+  INGEST_BACKPRESSURE = 4;
+  INGEST_INVALID = 5;
 }
+
+message IngestRequest {
+  string event_id = 1; 
+  string device_id = 2;
+  bytes payload = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  IngestSource source = 5;
+}
+
+message IngestResponse {
+  IngestStatus status = 1;
+  string event_id = 2;
+  string reason = 3;
+}
+
+
+// PROTOBUF OVER NATS SUBJECT DESIGN
+message TelemetryUpdate {
+  string event_id = 1;
+  string organization_id = 2;
+  string device_id = 3;
+  google.protobuf.Timestamp timestamp = 4; // optional
+  repeated SensorValue sensors_values = 5;
+}
+
+message SensorValue {
+  string sensor_type = 1;
+  double value = 3;
+  string unit = 4;
+}
+
+enum DeviceStatus {
+  UNKNOWN = 0;
+  ONLINE = 1;
+  OFFLINE = 2;
+  DEGRADED = 3;
+}
+
+message DeviceState {
+  string organization_id = 1;
+  string device_id = 2;
+  DeviceStatus status = 3;
+  int64 last_seen = 4;
+
+  string firmware_version = 5;
+  repeated string sensors = 6;
+
+  map<string, string> metadata = 7;
+}
+
+
+
 
 // Embedded message for devices that support Protobuf
-message TelemetryData {
+message DeviceData {
   uint64 timestamp = 1;
 
   oneof data {
-    CANFrame can = 2;
-    IMUData  imu = 3;
-    GPSData  gps = 4;
+    CAN can = 2;
+    IMU  imu = 3;
+    GPS gps = 4;
   }
 }
 
-message CANFrame {
+message CAN {
   uint32 id = 1;
   bytes data = 2; // 8-byte CAN payload
 }
 
-message IMUData {
+message IMU {
   float ax = 1; // acceleration
   float ay = 2;
   float az = 3;
@@ -59,7 +120,7 @@ message IMUData {
   float y = 9;
 }
 
-message GPSData {
+message GPS {
   double latitude = 1;
   double longitude = 2;
   float altitude = 3;
@@ -88,6 +149,7 @@ message AcknowledgeCommandResponse {
   bool success = 1;
   string message = 2;
 }
+
 // Breakdown of the Example
 // The provided .proto file defines two gRPC services for sensor communication:
 // TelemetryService (data from sensors) and CommandService (data to sensors),
