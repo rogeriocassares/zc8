@@ -1,9 +1,18 @@
-// go.work
 go 1.25.5
 
 use (
-	./apps/telemetry/grpc-parser
-	./apps/telemetry/mqtt-to-grpc
-	./apps/telemetry/post-to-grpc
+	./packages/go-cache
+	./packages/go-config
+	./packages/go-data
+	./packages/go-infra
+	./packages/go-parser
+	./packages/go-pipeline
+	./packages/go-transport
 	./packages/proto
+	./services/ingest
+	./services/transport/grpc-client
+	./services/transport/grpc-server
+	./services/transport/http-client
+	./services/transport/http-server
+	./services/transport/mqtt-subscriber
 )

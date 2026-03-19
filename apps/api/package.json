@@ -1,0 +1,25 @@
+{
+  "name": "@repo/core",
+  "version": "1.0.50",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run dist/index.js",
+    "build": "bun build src/index.ts --outdir dist --target bun"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1.4.1",
+    "dotenv": "^16.4.5",
+    "elysia": "^1.4.17",
+    "ioredis": "^5.8.2",
+    "nats": "^2.29.3",
+    "pg": "^8.11.3",
+    "redis": "^5.10.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "bun-types": "latest"
+  },
+  "module": "src/index.js"
+}

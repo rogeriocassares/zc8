@@ -52,11 +52,15 @@ services:
     image: nats:2.12.4-alpine3.22
     container_name: nats
     restart: unless-stopped
-    command: "-m 8222"
+    command: "-js -sd /data -m 8222"
     ports:
       - "4222:4222" # Client port
       - "8222:8222" # Monitoring port
+    volumes:
+      - nats_data:/data
 
 volumes:
   postgres_data:
+    driver: local
+  nats_data:
     driver: local

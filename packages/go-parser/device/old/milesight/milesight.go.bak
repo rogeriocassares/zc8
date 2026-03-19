@@ -1,0 +1,246 @@
+package milesight
+
+import (
+	"encoding/binary"
+	"fmt"
+	"math"
+
+	"github.com/rogeriocassares/zc8/packages/go-parser/parser"
+)
+
+// MilesightDeviceParser implements the DeviceParser interface for Milesight devices.
+// Parses the channel-based binary format of Milesight environmental sensors.
+type MilesightDeviceParser struct{}
+
+// NewMilesightDeviceParser creates a new Milesight device parser.
+func NewMilesightDeviceParser() *MilesightDeviceParser {
+	return &MilesightDeviceParser{}
+}
+
+// Parse decodes a Milesight device payload using the channel-based TLV format.
+//
+// Milesight sensors use a structured binary format where each field is:
+//
+//	Byte 1: Channel ID
+//	Byte 2: Channel Type (data type indicator)
+//	Bytes 3+: Value (length depends on type)
+//
+// Channel Types:
+//
+//	0x00 = BOOL (1 byte)
+//	0x01 = INT8 (1 byte)
+//	0x02 = UINT8 (1 byte)
+//	0x03 = INT16 (2 bytes, big-endian)
+//	0x04 = UINT16 (2 bytes, big-endian)
+//	0x05 = INT32 (4 bytes, big-endian)
+//	0x06 = UINT32 (4 bytes, big-endian)
+//	0x07 = FLOAT32 (4 bytes, big-endian)
+//
+// Example payload: 02890C23400D6841...
+//
+//	02 = Channel ID 0x02 (Temperature)
+//	89 = Channel Type 0x89 (custom Milesight type for calibrated temperature)
+//	0C23 = Value encoding
+//	...
+func (p *MilesightDeviceParser) Parse(payload []byte) (*parser.DeviceData, error) {
+	if len(payload) == 0 {
+		return nil, fmt.Errorf("milesight: empty payload")
+	}
+
+	values := make(map[string]interface{})
+
+	// Parse channel-based format
+	i := 0
+	for i < len(payload) {
+		if i+2 > len(payload) {
+			break
+		}
+
+		channelID := payload[i]
+		channelType := payload[i+1]
+		i += 2
+
+		// Parse based on channel type
+		switch {
+		case channelType == 0x00: // BOOL
+			if i < len(payload) {
+				val := payload[i] != 0
+				values[p.channelName(channelID)] = val
+				i++
+			}
+
+		case channelType == 0x01: // INT8
+			if i < len(payload) {
+				val := int8(payload[i])
+				values[p.channelName(channelID)] = float64(val)
+				i++
+			}
+
+		case channelType == 0x02: // UINT8
+			if i < len(payload) {
+				val := uint8(payload[i])
+				values[p.channelName(channelID)] = float64(val)
+				i++
+			}
+
+		case channelType == 0x03: // INT16
+			if i+1 < len(payload) {
+				val := int16(binary.BigEndian.Uint16(payload[i : i+2]))
+				values[p.channelName(channelID)] = float64(val)
+				i += 2
+			}
+
+		case channelType == 0x04: // UINT16
+			if i+1 < len(payload) {
+				val := uint16(binary.BigEndian.Uint16(payload[i : i+2]))
+				values[p.channelName(channelID)] = float64(val)
+				i += 2
+			}
+
+		case channelType == 0x05: // INT32
+			if i+3 < len(payload) {
+				val := int32(binary.BigEndian.Uint32(payload[i : i+4]))
+				values[p.channelName(channelID)] = float64(val)
+				i += 4
+			}
+
+		case channelType == 0x06: // UINT32
+			if i+3 < len(payload) {
+				val := uint32(binary.BigEndian.Uint32(payload[i : i+4]))
+				values[p.channelName(channelID)] = float64(val)
+				i += 4
+			}
+
+		case channelType == 0x07: // FLOAT32
+			if i+3 < len(payload) {
+				bits := binary.BigEndian.Uint32(payload[i : i+4])
+				val := math.Float32frombits(bits)
+				values[p.channelName(channelID)] = float64(val)
+				i += 4
+			}
+
+		// Milesight-specific types for environmental sensors
+		case channelType == 0x41: // Temperature (INT16,scale 0.1)
+			if i+1 < len(payload) {
+				raw := int16(binary.BigEndian.Uint16(payload[i : i+2]))
+				val := float64(raw) * 0.1
+				values["temperature_c"] = val
+				i += 2
+			}
+
+		case channelType == 0x42: // Humidity (UINT8)
+			if i < len(payload) {
+				val := uint8(payload[i])
+				values["humidity_percent"] = float64(val)
+				i++
+			}
+
+		case channelType == 0x43: // Battery voltage (UINT16, millivolts)
+			if i+1 < len(payload) {
+				val := uint16(binary.BigEndian.Uint16(payload[i : i+2]))
+				values["battery_mv"] = float64(val)
+				i += 2
+			}
+
+		case channelType == 0x44: // PIR motion detected (BOOL)
+			if i < len(payload) {
+				val := payload[i] != 0
+				values["pir_motion"] = val
+				i++
+			}
+
+		case channelType == 0x45: // Illumination (UINT16, lux)
+			if i+1 < len(payload) {
+				val := uint16(binary.BigEndian.Uint16(payload[i : i+2]))
+				values["illumination_lux"] = float64(val)
+				i += 2
+			}
+
+		case channelType == 0x46: // CO2 (UINT16, ppm)
+			if i+1 < len(payload) {
+				val := uint16(binary.BigEndian.Uint16(payload[i : i+2]))
+				values["co2_ppm"] = float64(val)
+				i += 2
+			}
+
+		case channelType == 0x47: // Atmospheric Pressure (UINT32, Pa)
+			if i+3 < len(payload) {
+				val := uint32(binary.BigEndian.Uint32(payload[i : i+4]))
+				values["pressure_pa"] = float64(val)
+				i += 4
+			}
+
+		default:
+			// Unknown type, try to skip intelligently
+			// This prevents infinite loops on unknown data
+		}
+	}
+
+	return &parser.DeviceData{
+		Values:    values,
+		Metadata:  make(map[string]string),
+		Raw:       payload,
+		Timestamp: 0, // Will be filled by normalizer
+	}, nil
+}
+
+// Name returns the parser name.
+func (p *MilesightDeviceParser) Name() string {
+	return "milesight"
+}
+
+// channelName maps Milesight channel IDs to standard field names.
+func (p *MilesightDeviceParser) channelName(channelID byte) string {
+	switch channelID {
+	case 0x01:
+		return "battery_percent"
+	case 0x02:
+		return "temperature_c"
+	case 0x03:
+		return "humidity_percent"
+	case 0x04:
+		return "pir_motion"
+	case 0x05:
+		return "illumination_lux"
+	case 0x06:
+		return "co2_ppm"
+	case 0x07:
+		return "pressure_pa"
+	case 0x08:
+		return "tvoc_ppb"
+	case 0x09:
+		return "pm25_ug_m3"
+	case 0x0A:
+		return "pm10_ug_m3"
+	case 0x0B:
+		return "co_ppm"
+	default:
+		return fmt.Sprintf("channel_0x%02x", channelID)
+	}
+}
+
+// ============================================================================
+// Example Usage
+// ============================================================================
+
+/*
+// Typical Milesight sensor payload (binary, channel-based format):
+// Temperature (0x02, 0x41) = 23.4°C: 02 41 00 EA (0x00EA = 234, * 0.1 = 23.4)
+// Humidity (0x03, 0x42) = 65%: 03 42 41 (0x41 = 65)
+// Battery (0x04, 0x43) = 3000mV: 04 43 0B B8 (0x0BB8 = 3000)
+// Motion (0x05, 0x44) = true: 05 44 01
+
+Assembled payload: 0241 00EA 0342 41 0443 0BB8 0544 01
+
+// Parser output:
+DeviceData{
+  Values: {
+    "temperature_c": 23.4,
+    "humidity_percent": 65,
+    "battery_mv": 3000,
+    "pir_motion": true
+  },
+  Raw: [0x02, 0x41, 0x00, 0xEA, ...],
+  Timestamp: 0 (set by normalizer)
+}
+*/

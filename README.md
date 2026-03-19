@@ -161,7 +161,7 @@ protoc \
   --go-grpc_out=packages/proto/gen/go \
   --go_opt=paths=source_relative \
   --go-grpc_opt=paths=source_relative \
-  telemetry/v1/telemetry.proto
+  telemetry/v1/ingest.proto
 ```
 
 ## devices
@@ -461,3 +461,7 @@ Update Proto in code ok
 
 Write telemetry_ingest with raw, org, device, event
 raw_payload
+
+so ;ns must use a instance of http-server and mqtt-subscriber. What is the best approach?
+
+user create device -> if device is lns it can be chirpstack and/or everynet. If chirpstack, use the pool of mqtt subscriber to a user defined broker topic. If everynet, use a http-server from pool to receive the data in a relative path by org

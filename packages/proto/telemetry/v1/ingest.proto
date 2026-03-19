@@ -1,0 +1,541 @@
+// ingest.proto
+// event.proto
+// command.proto
+// device_state.proto
+
+
+syntax = "proto3";
+
+option go_package = "github.com/rogeriocassares/zc8/packages/proto/telemetry/v1";
+
+package zc8_telemetry_proto_v1;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+// TelemetryIngestService provides RPCs for ingesting telemetry data from devices.
+service TelemetryIngestService {
+  // Ingest accepts a single ingest request and returns a response with the ingest status.
+  rpc IngestUnary(IngestRequest) returns (IngestAck);
+  // IngestStream accepts a stream of ingest requests and returns a single response.
+  rpc IngestStream(stream IngestRequest) returns (stream IngestAck);
+  // IngestBatch accepts a batch of ingest requests for maximum throughput.
+  // Used by transport workers that accumulate messages before forwarding.
+  rpc IngestBatch(IngestBatchRequest) returns (IngestBatchAck);
+}
+
+// CommandService provides RPCs for sending commands to devices.
+service CommandService {
+   // Web/API side
+  // SendCommand sends a command to a device and returns the command ID.
+  rpc SendCommand(SendCommandRequest) returns (SendCommandResponse);
+  // AcknowledgeCommand acknowledges receipt of a command on the device.
+  
+  // Agent side — bidirectional
+  rpc CommandStream(stream CommandStreamMessage)
+  returns (stream CommandStreamMessage);
+}
+
+message CommandStreamMessage {
+
+  oneof message {
+    CommandDispatch dispatch = 1;
+    CommandAck ack = 2;
+    // CommandHeartbeat heartbeat = 3;
+  }
+}
+
+message CommandDispatch {
+  string command_id = 1;
+  string device_id = 2;
+  google.protobuf.Any payload = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message CommandAck {
+  string command_id = 1;
+  string device_id = 2;
+  bool success = 3;
+  string error = 4;
+  google.protobuf.Timestamp acknowledged_at = 5;
+}
+
+enum IngestSource {
+  SOURCE_UNSPECIFIED = 0;
+  SOURCE_MQTT        = 1;
+  SOURCE_GRPC        = 2;
+  SOURCE_CLI         = 3;
+}
+
+enum IngestStatus {
+  INGEST_STATUS_UNSPECIFIED = 0;
+  INGEST_OK                 = 1;
+  INGEST_DUPLICATE          = 2;
+  INGEST_INVALID            = 3;
+  INGEST_REJECTED           = 4;
+  INGEST_BACKPRESSURE       = 5;
+  INGEST_INTERNAL_ERROR     = 6;
+}
+
+// ParsedField represents a single parsed measurement field
+// This is sent from adapters after local parsing
+message ParsedField {
+  string key = 1;
+  double value = 2;
+}
+
+message IngestRequest {
+  string                    event_id   = 1; // REQUIRED for idempotency
+  google.protobuf.Timestamp timestamp  = 2; // ingestion timestamp
+  IngestSource              source     = 3;
+  
+  // ✅ ROUTING KEY (moved to top-level for O(1) access)
+  // Pre-computed at device creation, used for: shard routing, cache lookup, tenant isolation
+  // Eliminates per-message hash computation (100+ cycles → 1 cycle)
+  uint64 device_key = 8;
+  
+  // Unified adapter payload (one of LNS or MQTT adapter messages)
+  oneof payload {
+    AgentAdapterMessage     agent_message = 4;
+    LNSAdapterMessage     lns_message  = 5;
+    Zc2xAdapterMessage     zc2x_message  = 6;
+    MQTTGatewayMessage    mqtt_message = 7;
+  }
+  
+  // ✅ PRE-PARSED FIELDS: Transport layer already parsed → ingest skips parsing
+  // This is the fast path: transport does gateway+device parse, sends fields directly
+  repeated ParsedField pre_parsed_fields = 9;
+  
+  // ✅ DEVICE CONTEXT: Resolved at transport layer via 3-tier cache
+  // Carries all ingest routing info so ingest engine has ZERO DB lookups on hot path
+  DeviceContext device_context = 10;
+}
+
+// DeviceContext is resolved at the transport layer from the 3-tier cache
+// (LRU → Redis → PostgreSQL) and attached to every IngestRequest.
+// This eliminates per-message DB lookups at the ingest layer.
+message DeviceContext {
+  uint64 device_key = 1; // Same as IngestRequest.device_key (for validation)
+  int64  organization_id = 2;
+  int64  team_id = 3;
+  string device_model_code = 4; // e.g., "AM308", "ZC2X-01"
+  int64  vendor_id = 5;
+  uint32 parser_id = 6; // Binary parser ID for ingest engine
+  
+  // Ingest routing configuration (resolved from ingest_registry tables)
+  IngestRouting ingest_routing = 7;
+}
+
+// IngestRouting tells the ingest engine exactly WHERE and HOW to write.
+// Resolved from ingest_registry + ingest_*_config tables at the transport layer.
+// All fields are pre-resolved — ingest engine just follows instructions.
+message IngestRouting {
+  // InfluxDB target
+  int64  influxdb_config_id = 1; // FK to ingest_influxdb_config
+  bool   write_to_influxdb = 2;
+  bool   require_influxdb_ack = 3; // true = wait for write confirmation
+  string influxdb_host = 4; // Pre-resolved host:port
+  string influxdb_token = 5; // Pre-resolved auth token
+  string influxdb_bucket = 6; // Pre-resolved bucket name
+  string influxdb_measurement = 7; // Pre-resolved measurement name
+  
+  // Redis target
+  int64  redis_config_id = 8; // FK to ingest_redis_config
+  bool   write_to_redis = 9;
+  int32  redis_max_hash_entries = 10; // Last N readings per device
+  string redis_host = 11; // Pre-resolved host:port
+  string redis_key_prefix = 12; // Pre-resolved key prefix
+  
+  // NATS target
+  int64  nats_config_id = 13; // FK to ingest_nats_config
+  bool   write_to_nats = 14;
+  string nats_url = 15; // Pre-resolved NATS URL
+  string nats_subject_prefix = 16; // Pre-resolved subject prefix
+}
+
+// IngestBatchRequest allows sending multiple messages in a single gRPC call.
+// Used by transport workers that accumulate batches before forwarding.
+message IngestBatchRequest {
+  repeated IngestRequest requests = 1;
+}
+
+message IngestAck {
+  string                    event_id = 1;
+  IngestStatus              status      = 2;
+  google.protobuf.Timestamp ingest_time = 3; // server ingest time
+  string                    reason = 4;
+}
+
+message IngestBatchAck {
+  repeated IngestAck acks = 1;
+  int32 accepted = 2; // count of accepted messages
+  int32 rejected = 3; // count of rejected messages
+}
+
+// PROTOBUF OVER NATS SUBJECT DESIGN
+message TelemetryEvent {
+  string                    event_id        = 1;
+  string                    organization_id = 2;
+  string                    device_id       = 3;
+  google.protobuf.Timestamp event_time       = 4; // optional
+  google.protobuf.Timestamp ingest_time       = 5; // optional
+    repeated SensorReading readings = 6;
+
+}
+
+message SensorReading {
+  string sensor_type = 1;
+  oneof value {
+    double value_float = 2;
+    int64  value_int   = 3;
+    bool   value_bool  = 4;
+  }
+  string unit = 5;
+}
+
+enum DeviceStatus {
+  UNKNOWN  = 0;
+  ONLINE   = 1;
+  OFFLINE  = 2;
+  DEGRADED = 3;
+}
+
+message DeviceStateEvent {
+  string       organization_id = 1;
+  string       device_id       = 2;
+  DeviceStatus status          = 3;
+  google.protobuf.Timestamp last_seen = 4;
+
+  string          firmware_version = 5;
+  map<string, string> metadata = 6;
+
+}
+
+// Embedded message for devices that support Protobuf
+message DeviceData {
+  uint64 timestamp = 1;
+
+  oneof data {
+    CAN can = 2;
+    IMU imu = 3;
+    GPS gps = 4;
+  }
+}
+
+message CAN {
+  uint32 id   = 1;
+  bytes  data = 2; // 8-byte CAN payload
+}
+
+message IMU {
+  float ax = 1; // acceleration
+  float ay = 2;
+  float az = 3;
+  float gx = 4; // gyroscope
+  float gy = 5;
+  float gz = 6;
+  float r  = 7; // euler orientation
+  float p  = 8;
+  float y  = 9;
+}
+
+message GPS {
+  double latitude  = 1;
+  double longitude = 2;
+  float  altitude  = 3;
+  float  speed     = 4;
+}
+
+message SendCommandRequest {
+  string                    device_id    = 1;
+  google.protobuf.Any       command_data = 2;
+  google.protobuf.Timestamp timestamp    = 3;
+}
+
+message SendCommandResponse {
+  bool   success    = 1;
+  string command_id = 2;
+  string error      = 3;
+}
+
+message AcknowledgeCommandRequest {
+  string                    command_id  = 1;
+  string                    device_id   = 2;
+  google.protobuf.Timestamp received_at = 3;
+}
+
+message AcknowledgeCommandResponse {
+  bool   success = 1;
+  string message = 2;
+}
+
+// Breakdown of the Example
+// The provided .proto file defines two gRPC services for sensor communication:
+// TelemetryService (data from sensors) and CommandService (data to sensors),
+// following protocol buffer best practices.//
+
+// TelemetryService
+// GetSensorData: Unary RPC to request sensor readings.
+// Request: GetSensorDataRequest (sensor ID and optional timestamp).
+// Response: GetSensorDataResponse (list of SensorReading and status).
+// StreamTelemetry: Server-streaming RPC for continuous telemetry.
+// Request: StreamTelemetryRequest (sensor ID).
+// Response: Stream of TelemetryData messages.
+// CommandService
+// SendCommand: Unary RPC to send a command to a sensor.
+// Request: SendCommandRequest (command type, parameters, target).
+// Response: SendCommandResponse (success flag, message, command ID).
+// AcknowledgeCommand: RPC to confirm command receipt.
+// Request: AcknowledgeCommandRequest (command ID).
+// Response: google.protobuf.Empty (no content).
+// Message Design
+// All messages use CamelCase.
+// Fields use lower_snake_case.
+// Reusable types like SensorReading and TelemetryData encapsulate structured
+// data. Using google.protobuf.Empty allows future expansion (e.g., adding
+// metadata)
+
+// ingest from lns-adapter
+// ============================================================================
+// LNS ADAPTER MESSAGE - PASSED TO INGEST SERVICE
+// ============================================================================
+// This protobuf message flows from the LoRaWAN Network Server (LNS) adapter
+// through the router to the ingest service. Telemetry tracing uses event_id
+// throughout the entire pipeline.
+
+message EventMetadata {
+  // Immutable tracing information set at LNS adapter layer
+  string event_id = 1; // ULID - unique per message (26 chars, base32)
+  int64 generated_at_ms = 2; // Adapter generation timestamp (milliseconds)
+  string source_adapter = 3; // "lns" for LoRaWAN Network Server / ChirpStack
+  int64 tenant_id = 4; // Multi-tenant isolation
+}
+
+message DeviceIdentification {
+  // DevEUI and DevAddr are from provider, immutable
+  string dev_eui = 1; // LoRaWAN Device EUI (16 hex chars)
+  string dev_addr = 2; // LoRaWAN Device Address (8 hex chars)
+  
+  // device_id discovery results (optional, may be missing if cache miss)
+  // Note: device_key for routing is now at top-level IngestRequest.device_key
+  // This device_id is for: tracing, adapter-specific logic, identification
+  string device_id = 3; // UUID from device_registry (for tracing/identification)
+  int64 vendor_id = 4; // Device vendor ID
+  int64 parser_id = 5; // Which parser to use for device payload
+}
+
+message SignalQuality {
+  int32 rssi = 1; // Signal strength in dBm (-120 to 0)
+  float snr = 2; // Signal-to-noise ratio (dB)
+}
+
+message PhysicalLayer {
+  int32 data_rate = 1; // Data rate (0-15)
+  int32 spreading_factor = 2; // Spreading factor (7-12)
+  int32 bandwidth_khz = 3; // Bandwidth in kHz (typically 125, 250, 500)
+  float frequency_mhz = 4; // Frequency in MHz (e.g., 868.1)
+}
+
+message LoRaWANFrame {
+  int32 port = 1; // LoRaWAN port (0-223)
+  int32 frame_counter = 2; // Frame counter for replay detection
+  bool confirmed = 3; // ACK requested by device
+  bytes payload = 4; // Raw device payload
+  int64 timestamp_ms = 5; // When message was received
+}
+
+message GatewayInfo {
+  string gateway_id = 1; // Gateway identifier
+  float latitude = 2; // GPS latitude (optional)
+  float longitude = 3; // GPS longitude (optional)
+  float altitude = 4; // GPS altitude (optional)
+}
+
+message SecurityContext {
+  // Correlation ID for request tracing
+  string context_id = 1; // Correlation ID
+  // Device tags for filtering/routing decisions
+  repeated string tags = 2; // Device tags (e.g., "production", "test")
+}
+
+// Main message
+message LNSAdapterMessage {
+  // === LAYER 1: TELEMETRY (from adapter, immutable) ===
+  EventMetadata event = 1;
+  
+  // === LAYER 2: DEVICE IDENTIFICATION ===
+  DeviceIdentification identification = 2;
+  
+  // === LAYER 3: PAYLOAD AND METADATA ===
+  LoRaWANFrame frame = 3;
+  SignalQuality signal = 4;
+  PhysicalLayer physical = 5;
+  GatewayInfo gateway = 6;
+  
+  // === LAYER 4: SECURITY/TRACING ===
+  SecurityContext security = 7;
+  
+  // === LAYER 5: PARSED FIELDS (NEW - adapter-side parsing) ===
+  repeated ParsedField parsed_fields = 8; // Pre-parsed from payload
+  
+  // === FUTURE USE ===
+  map<string, string> custom_fields = 9; // Provider-specific extensions
+}
+
+// Batch for efficiency
+message BatchLNSMessages {
+  repeated LNSAdapterMessage messages = 1;
+  int64 batch_id_ms = 2; // Batch timestamp for grouping
+}
+
+// ============================================================================
+// MQTT ADAPTER MESSAGE - ALTERNATIVE INGEST PATH FOR MQTT GATEWAY
+// ============================================================================
+// MQTT gateway receives messages from arbitrary MQTT topics and forwards
+// to ingest service. Much simpler than LoRaWAN - just topic, QoS, and payload.
+
+message MQTTEventMetadata {
+  // Immutable tracing information set at MQTT gateway layer
+  string event_id = 1; // ULID - unique per message (26 chars, base32)
+  int64 generated_at_ms = 2; // Gateway generation timestamp (milliseconds)
+  string source_adapter = 3; // "mqtt" for generic MQTT gateway
+  int64 tenant_id = 4; // Multi-tenant isolation
+}
+
+message MQTTClientInfo {
+  // MQTT connection details
+  string client_id = 1; // MQTT client identifier (optional)
+  string topic = 2; // MQTT topic message was published to
+  int32 qos = 3; // Quality of Service (0, 1, or 2)
+  bool retain = 4; // Message was retained by broker
+  string broker_url = 5; // Broker connection string (optional, for routing)
+}
+
+message MQTTDeviceIdentification {
+  // Device identification from MQTT topic or payload
+  // Examples: devices/{device_id}/telemetry or devices/{device_id}/status
+  string device_id = 1; // UUID from device_registry (if known)
+  string topic_device_id = 2; // Device ID extracted from MQTT topic (if different)
+  string device_name = 3; // Human-readable device name (optional)
+  map<string, string> device_tags = 4; // Device metadata tags
+}
+
+message MQTTGatewayMessage {
+  // === LAYER 1: TELEMETRY (from adapter, immutable) ===
+  MQTTEventMetadata event = 1;
+  
+  // === LAYER 2: DEVICE IDENTIFICATION ===
+  MQTTDeviceIdentification device = 2;
+  
+  // === LAYER 3: MQTT CONTEXT ===
+  MQTTClientInfo mqtt = 3;
+  
+  // === LAYER 4: PAYLOAD ===
+  bytes payload = 4; // Raw MQTT message payload
+  
+  // === LAYER 5: PARSED FIELDS (NEW) ===
+  repeated ParsedField parsed_fields = 5; // Pre-parsed from payload
+  
+  // === LAYER 6: SECURITY/TRACING ===
+  SecurityContext security = 6;
+  
+  // === FUTURE USE ===
+  map<string, string> custom_fields = 7; // Provider-specific extensions
+}
+
+// Batch for efficiency
+message BatchMQTTMessages {
+  repeated MQTTGatewayMessage messages = 1;
+  int64 batch_id_ms = 2; // Batch timestamp for grouping
+}
+
+// ============================================================================
+// ZC2X ADAPTER MESSAGE - FOR ZC2X PROTOCOL DEVICES
+// ============================================================================
+
+message Zc2xAdapterMessage {
+  // === LAYER 1: TELEMETRY (from adapter, immutable) ===
+  string event_id = 1;
+  int64 generated_at_ms = 2; // Adapter generation timestamp
+  string source_adapter = 3; // "zc2x" for ZC2x protocol
+  int64 tenant_id = 4;
+  
+  // === LAYER 2: DEVICE IDENTIFICATION ===
+  string device_id = 5; // UUID from device_registry
+  string device_name = 6; // Human-readable device name
+  
+  // === LAYER 3: DEVICE CONTEXT ===
+  int64 vendor_id = 7; // Device vendor ID
+  
+  // === LAYER 4: PAYLOAD & PARSED FIELDS ===
+  bytes raw_payload = 8; // Raw binary (for debugging/fallback)
+  repeated ParsedField parsed_fields = 9; // Pre-parsed fields
+  
+  // === LAYER 5: METADATA ===
+  int64 timestamp_ms = 10; // Message timestamp
+  string signal_strength = 11; // Signal quality
+  
+  // === LAYER 6: SECURITY/TRACING ===
+  string context_id = 12; // Correlation ID
+  repeated string tags = 13; // Device tags
+  
+  // === FUTURE USE ===
+  map<string, string> custom_fields = 14;
+}
+
+// ============================================================================
+// AGENT ADAPTER MESSAGE - FOR AGENT GATEWAYS
+// ============================================================================
+
+message AgentAdapterMessage {
+  // === LAYER 1: TELEMETRY (from adapter, immutable) ===
+  string event_id = 1;
+  int64 generated_at_ms = 2; // Adapter generation timestamp
+  string source_adapter = 3; // "agent" for agent gateway
+  int64 tenant_id = 4;
+  
+  // === LAYER 2: DEVICE IDENTIFICATION ===
+  string device_id = 5;
+  string device_name = 6;
+  
+  // === LAYER 3: AGENT CONTEXT ===
+  string agent_id = 7; // Which agent sent this
+  string gateway_id = 8; // Gateway identifier
+  
+  // === LAYER 4: PAYLOAD & PARSED FIELDS ===
+  bytes raw_payload = 9; // Raw binary (for debugging/fallback)
+  repeated ParsedField parsed_fields = 10; // Pre-parsed fields
+  
+  // === LAYER 5: METADATA ===
+  int64 timestamp_ms = 11;
+  string location = 12; // GPS or logical location
+  
+  // === LAYER 6: SECURITY/TRACING ===
+  string context_id = 13;
+  repeated string tags = 14;
+  
+  // === FUTURE USE ===
+  map<string, string> custom_fields = 15;
+}
+
+// ============================================================================
+// MONITORING (should be moved to separate proto for metrics/health)
+// ============================================================================
+
+// Health check response
+message AdapterHealthStatus {
+  bool is_healthy = 1;
+  int64 last_message_ms = 2;
+  int64 message_count = 3;
+  int64 error_count = 4;
+  map<string, string> details = 5;
+}
+
+// Cache stats for monitoring (track via metrics service, not message)
+message CacheStats {
+  int64 total_messages = 1;
+  int64 cache_hits = 2;
+  int64 cache_misses = 3;
+  float cache_hit_rate = 4; // 0.0-100.0
+  int64 avg_lookup_latency_ms = 5;
+}
