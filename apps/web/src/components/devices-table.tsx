@@ -110,11 +110,7 @@ function DeviceRow({
         </span>
       </td>
       <td className="px-4 py-3">
-        <DeviceActions
-          device={device}
-          organizationId={organizationId}
-          onRefresh={onRefresh}
-        />
+        <DeviceActions device={device} organizationId={organizationId} />
       </td>
     </tr>
   );
@@ -244,7 +240,7 @@ export function DevicesTable() {
                   lastHash={update?.lastHash || "—"}
                   lastValue={update?.lastValue}
                   timestamp={timestamp}
-                  organizationId={session.organizationId}
+                  organizationId={String(session.organizationId)}
                   onRefresh={fetchDevices}
                 />
               );

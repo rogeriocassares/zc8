@@ -193,12 +193,12 @@ export class AdapterManagerService {
     // TODO: Call actual adapter factory to start the adapter
     // For now, just mark as running
     return (
-      this.store.updateAdapterInstance(org_id, config_id, {
+      await this.store.updateAdapterInstance(org_id, config_id, {
         status: AdapterStatus.RUNNING,
         started_at: new Date(),
         health_status: AdapterHealthStatus.HEALTHY,
         last_health_check: new Date(),
-      }) || instance
+      }) ?? instance
     );
   }
 

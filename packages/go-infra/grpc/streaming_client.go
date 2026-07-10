@@ -43,11 +43,11 @@ type StreamingClient struct {
 	config   StreamingClientConfig
 	conn     *grpc.ClientConn
 	client   pb.TelemetryIngestServiceClient
-	stream   pb.TelemetryIngestService_IngestStreamClient
+	stream   grpc.BidiStreamingClient[pb.IngestEnvelope, pb.IngestAck]
 	streamMu sync.Mutex
 	logger   *log.Logger
 
-	sendQueue chan *pb.IngestRequest
+	sendQueue chan *pb.IngestEnvelope
 	recvQueue chan *pb.IngestAck
 	errQueue  chan error
 
@@ -77,7 +77,7 @@ func NewStreamingClient(config StreamingClientConfig, logger *log.Logger) (*Stre
 	sc := &StreamingClient{
 		config:      config,
 		logger:      logger,
-		sendQueue:   make(chan *pb.IngestRequest, config.SendQueueSize),
+		sendQueue:   make(chan *pb.IngestEnvelope, config.SendQueueSize),
 		recvQueue:   make(chan *pb.IngestAck, config.ReceiveQueueSize),
 		errQueue:    make(chan error, 10),
 		done:        make(chan struct{}),
@@ -228,7 +228,7 @@ func (sc *StreamingClient) sendWorker(workerID int) {
 }
 
 // sendRequest sends a single request on the stream
-func (sc *StreamingClient) sendRequest(ctx context.Context, req *pb.IngestRequest) error {
+func (sc *StreamingClient) sendRequest(ctx context.Context, req *pb.IngestEnvelope) error {
 	sc.streamMu.Lock()
 	defer sc.streamMu.Unlock()
 
@@ -296,7 +296,7 @@ func (sc *StreamingClient) receiveLoop() {
 }
 
 // Send sends a request to ingest service (queued for worker processing)
-func (sc *StreamingClient) Send(ctx context.Context, req *pb.IngestRequest) error {
+func (sc *StreamingClient) Send(ctx context.Context, req *pb.IngestEnvelope) error {
 	select {
 	case sc.sendQueue <- req:
 		return nil

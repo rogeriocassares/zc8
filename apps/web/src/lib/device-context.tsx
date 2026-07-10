@@ -14,6 +14,7 @@ import {
   useState,
 } from "react";
 import { useAuth } from "./auth-context";
+import { subscribeNatsRealtime } from "./nats-realtime";
 
 export interface DeviceLastUpdate {
   deviceId: string;
@@ -59,10 +60,8 @@ const DeviceContext = createContext<DeviceContextType | undefined>(undefined);
 
 const API_BASE =
   process.env.NEXT_PUBLIC_ELYSIA_API_URL || "http://localhost:3333";
-const WS_BASE =
-  process.env.NEXT_PUBLIC_WS_URL ||
-  process.env.NEXT_PUBLIC_ELYSIA_API_URL?.replace(/^http/, "ws") ||
-  "ws://localhost:3333";
+const NATS_WS_URL =
+  process.env.NEXT_PUBLIC_NATS_WS_URL || "ws://localhost:4223";
 
 export function DeviceProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
@@ -74,7 +73,6 @@ export function DeviceProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
   const [isPausingPolling, setIsPausingPolling] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
   const subscriptionsRef = useRef<Set<string>>(new Set());
 
   // Extract and memoize session credentials to ensure stable dependencies
@@ -134,88 +132,45 @@ export function DeviceProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token, organizationId]);
 
-  // Connect to WebSocket for real-time updates
+  // Connect to NATS for real-time telemetry updates
   useEffect(() => {
-    if (!token) return;
+    if (!token || !organizationId) return;
 
-    let ws: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let cleanup: (() => void) | null = null;
 
-    const connectWebSocket = () => {
-      try {
-        ws = new WebSocket(
-          `${WS_BASE}/api/realtime?token=${encodeURIComponent(token)}`,
-        );
-
-        ws.onopen = () => {
-          console.log("Realtime WebSocket connected");
-          setWsConnected(true);
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data);
-
-            if (message.type === "telemetry" && message.data) {
-              const { device_key, fields, ts } = message.data;
-
-              setDeviceUpdates((prev) => {
-                const updated = new Map(prev);
-                const deviceKeyStr = String(device_key);
-                updated.set(deviceKeyStr, {
-                  deviceId: deviceKeyStr,
-                  lastHash: "",
-                  lastValue: fields,
-                  timestamp: ts * 1000,
-                  updatedAt: new Date(ts * 1000).toISOString(),
-                });
-                return updated;
-              });
-            }
-          } catch (err) {
-            console.error("Failed to parse WebSocket message:", err);
-          }
-        };
-
-        ws.onerror = () => {
-          setWsConnected(false);
-        };
-
-        ws.onclose = () => {
-          setWsConnected(false);
-          wsRef.current = null;
-          // Reconnect after 3 seconds
-          reconnectTimer = setTimeout(connectWebSocket, 3000);
-        };
-
-        wsRef.current = ws;
-      } catch (err) {
-        console.error("Failed to connect WebSocket:", err);
-        reconnectTimer = setTimeout(connectWebSocket, 3000);
-      }
-    };
-
-    connectWebSocket();
+    subscribeNatsRealtime({
+      wsUrl: NATS_WS_URL,
+      token,
+      orgId: organizationId,
+      onMessage: (event) => {
+        setDeviceUpdates((prev) => {
+          const updated = new Map(prev);
+          const deviceKeyStr = String(event.device_key);
+          updated.set(deviceKeyStr, {
+            deviceId: deviceKeyStr,
+            lastHash: "",
+            lastValue: event.fields,
+            timestamp: event.ts * 1000,
+            updatedAt: new Date(event.ts * 1000).toISOString(),
+          });
+          return updated;
+        });
+      },
+      onConnected: () => setWsConnected(true),
+      onDisconnected: () => setWsConnected(false),
+    }).then((fn) => {
+      cleanup = fn;
+    });
 
     return () => {
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (ws) {
-        ws.onclose = null; // Prevent reconnect on intentional close
-        ws.close();
-      }
-      wsRef.current = null;
+      cleanup?.();
       setWsConnected(false);
     };
-  }, [token]);
+  }, [token, organizationId]);
 
-  // Subscribe to device updates via WebSocket
+  // Track subscribed devices (NATS subscription covers the whole org by subject pattern)
   const subscribeToUpdates = useCallback((deviceId: string) => {
     subscriptionsRef.current.add(deviceId);
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(
-        JSON.stringify({ action: "subscribe_device", deviceKey: deviceId }),
-      );
-    }
   }, []);
 
   // Unsubscribe from device updates

@@ -5,6 +5,7 @@
 
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEditDevice } from "@/hooks/useEditDevice";
 import type { Device } from "@/lib/device-context";
 
@@ -15,6 +16,7 @@ interface DeviceActionsProps {
 
 export function DeviceActions({ device, organizationId }: DeviceActionsProps) {
   const { openEdit } = useEditDevice();
+  const router = useRouter();
 
   return (
     <div className="flex gap-2">
@@ -27,6 +29,7 @@ export function DeviceActions({ device, organizationId }: DeviceActionsProps) {
         Edit
       </button>
       <button
+        onClick={() => router.push(`/devices/${device.id}`)}
         className="px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 rounded transition-colors"
         title="View details"
         type="button"

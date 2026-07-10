@@ -4,7 +4,7 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 
-const ELYSIA_API = process.env.ELYSIA_API_URL || "http://localhost:3001";
+const ELYSIA_API = process.env.NEXT_PUBLIC_ELYSIA_API_URL || process.env.ELYSIA_API_URL || "http://localhost:3333";
 
 export async function GET(request: NextRequest) {
   try {

@@ -227,7 +227,11 @@ export function OnlineDevicesTable() {
                     lastHash={update?.lastHash || "—"}
                     lastValue={update?.lastValue}
                     timestamp={update?.updatedAt || "—"}
-                    organizationId={session?.organizationId || ""}
+                    organizationId={
+                      session?.organizationId != null
+                        ? String(session.organizationId)
+                        : ""
+                    }
                   />
                 );
               })

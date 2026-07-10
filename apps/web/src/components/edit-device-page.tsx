@@ -21,7 +21,7 @@ export function EditDevicePage({
   const router = useRouter();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+    <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -35,6 +35,7 @@ export function EditDevicePage({
             </p>
           </div>
           <button
+            type="button"
             onClick={() => router.back()}
             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded transition-colors"
           >

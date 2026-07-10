@@ -89,32 +89,19 @@ func (ma *MQTTAdapter) Start() error {
 	return nil
 }
 
-// determineTopic sets the appropriate topics based on provider
+// determineTopic sets topics from config (TransportConfig.TopicConfig).
+// Topics must be populated from the integration_config_mqtt.subscribe_topics column.
+// If not configured, no topics are set and subscription is skipped.
 func (ma *MQTTAdapter) determineTopic() {
-	switch strings.ToLower(ma.worker.ProviderName) {
-	case "chirpstack":
-		// ChirpStack uses application-based topic structure
-		ma.topics = []string{
-			"applications/+/devices/+/up",
-		}
-	case "mqtt", "mqtt_direct", "direct mqtt":
-		// Direct MQTT uses device-based topic structure
-		ma.topics = []string{
-			"devices/+/up",
-			"devices/+/telemetry",
-		}
-	case "maua":
-		// Maua Racing custom topic structure
-		ma.topics = []string{
-			"maua/devices/+/data",
-			"maua/telemetry/+/up",
-		}
-	default:
-		// Generic fallback
-		ma.topics = []string{"devices/+/+"}
+	if len(ma.worker.Config.TopicConfig) > 0 {
+		ma.topics = ma.worker.Config.TopicConfig
+		ma.logger.Printf("Topics from config for provider %s: %v", ma.worker.ProviderName, ma.topics)
+		return
 	}
-
-	ma.logger.Printf("Configured topics: %v", ma.topics)
+	ma.logger.Printf(
+		"WARNING: no topics configured for provider %q worker %s — set subscribe_topics in integration_config_mqtt",
+		ma.worker.ProviderName, ma.worker.ID,
+	)
 }
 
 // generateClientID creates a unique client ID

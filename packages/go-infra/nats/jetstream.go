@@ -21,6 +21,9 @@ type JetStreamConfig struct {
 	MaxBytes int64
 	// MaxAge limits message retention (0 = unlimited).
 	MaxAge time.Duration
+	// MaxMsgsPerSubject limits stored messages per unique subject (0 = unlimited).
+	// Set to e.g. 100 for per-device JetStream replay (last 100 messages per device).
+	MaxMsgsPerSubject int64
 	// Replicas for HA (1 for dev/edge, 3 for prod).
 	Replicas int
 }
@@ -71,14 +74,15 @@ func NewJetStream(ctx context.Context, cfg JetStreamConfig, logger *log.Logger) 
 	}
 
 	streamCfg := jetstream.StreamConfig{
-		Name:      cfg.StreamName,
-		Subjects:  cfg.Subjects,
-		Retention: jetstream.LimitsPolicy,
-		MaxBytes:  cfg.MaxBytes,
-		MaxAge:    cfg.MaxAge,
-		Replicas:  replicas,
-		Storage:   jetstream.FileStorage,
-		Discard:   jetstream.DiscardOld,
+		Name:              cfg.StreamName,
+		Subjects:          cfg.Subjects,
+		Retention:         jetstream.LimitsPolicy,
+		MaxBytes:          cfg.MaxBytes,
+		MaxAge:            cfg.MaxAge,
+		MaxMsgsPerSubject: cfg.MaxMsgsPerSubject,
+		Replicas:          replicas,
+		Storage:           jetstream.FileStorage,
+		Discard:           jetstream.DiscardOld,
 	}
 
 	stream, err := js.CreateOrUpdateStream(ctx, streamCfg)

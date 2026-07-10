@@ -48,8 +48,8 @@ type BatchingClient struct {
 	client *StreamingClient
 	logger *log.Logger
 
-	// Input queue for individual requests
-	inputQueue chan *pb.IngestRequest
+	// Input queue for individual envelopes
+	inputQueue chan *pb.IngestEnvelope
 
 	// Batcher goroutines
 	batchers  int
@@ -75,7 +75,7 @@ func NewBatchingClient(config BatchingClientConfig, logger *log.Logger) (*Batchi
 		config:     config,
 		client:     streamingClient,
 		logger:     logger,
-		inputQueue: make(chan *pb.IngestRequest, config.StreamingConfig.SendQueueSize),
+		inputQueue: make(chan *pb.IngestEnvelope, config.StreamingConfig.SendQueueSize),
 		batchers:   config.NumBatchers,
 		done:       make(chan struct{}),
 	}
@@ -96,7 +96,7 @@ func NewBatchingClient(config BatchingClientConfig, logger *log.Logger) (*Batchi
 func (bc *BatchingClient) batcherLoop(batcherID int) {
 	defer bc.batcherWg.Done()
 
-	batch := make([]*pb.IngestRequest, 0, bc.config.BatchSize)
+	batch := make([]*pb.IngestEnvelope, 0, bc.config.BatchSize)
 	ticker := time.NewTicker(time.Duration(bc.config.FlushMs) * time.Millisecond)
 	defer ticker.Stop()
 
@@ -115,7 +115,7 @@ func (bc *BatchingClient) batcherLoop(batcherID int) {
 				batch = bc.flushBatch(batcherID, batch)
 			}
 
-		case req, ok := <-bc.inputQueue:
+		case env, ok := <-bc.inputQueue:
 			if !ok {
 				// Input queue closed, flush remaining
 				if len(batch) > 0 {
@@ -124,7 +124,7 @@ func (bc *BatchingClient) batcherLoop(batcherID int) {
 				return
 			}
 
-			batch = append(batch, req)
+			batch = append(batch, env)
 
 			// Flush by size
 			if len(batch) >= bc.config.BatchSize {
@@ -135,7 +135,7 @@ func (bc *BatchingClient) batcherLoop(batcherID int) {
 }
 
 // flushBatch sends accumulated batch to streaming client
-func (bc *BatchingClient) flushBatch(batcherID int, batch []*pb.IngestRequest) []*pb.IngestRequest {
+func (bc *BatchingClient) flushBatch(batcherID int, batch []*pb.IngestEnvelope) []*pb.IngestEnvelope {
 	if len(batch) == 0 {
 		return batch
 	}
@@ -144,10 +144,9 @@ func (bc *BatchingClient) flushBatch(batcherID int, batch []*pb.IngestRequest) [
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// For now, send each message individually through StreamingClient
-	// TODO: When proto supports BatchIngestRequest, send as batch
-	for _, req := range batch {
-		if err := bc.client.Send(ctx, req); err != nil {
+	// Send each envelope individually through StreamingClient
+	for _, env := range batch {
+		if err := bc.client.Send(ctx, env); err != nil {
 			bc.mu.Lock()
 			bc.errorCount++
 			bc.mu.Unlock()
@@ -166,11 +165,11 @@ func (bc *BatchingClient) flushBatch(batcherID int, batch []*pb.IngestRequest) [
 		bc.logger.Printf("[BatchingClient] Batcher %d flushed %d messages", batcherID, size)
 	}
 
-	return make([]*pb.IngestRequest, 0, bc.config.BatchSize)
+	return make([]*pb.IngestEnvelope, 0, bc.config.BatchSize)
 }
 
-// Send adds a request to be batched and sent
-func (bc *BatchingClient) Send(ctx context.Context, req *pb.IngestRequest) error {
+// Send adds an envelope to be batched and sent
+func (bc *BatchingClient) Send(ctx context.Context, req *pb.IngestEnvelope) error {
 	select {
 	case bc.inputQueue <- req:
 		return nil

@@ -1,18 +1,24 @@
 go 1.25.5
 
 use (
+	./packages/go-adapter-factory
+	./packages/go-adapter-messages
 	./packages/go-cache
+	./packages/go-command
 	./packages/go-config
 	./packages/go-data
 	./packages/go-infra
+	./packages/go-integration
 	./packages/go-parser
 	./packages/go-pipeline
-	./packages/go-transport
 	./packages/proto
-	./services/ingest
-	./services/transport/grpc-client
-	./services/transport/grpc-server
-	./services/transport/http-client
-	./services/transport/http-server
-	./services/transport/mqtt-subscriber
+	./services/input/grpc-pull
+	./services/input/grpc-server
+	./services/input/http-pull
+	./services/input/http-server
+	./services/input/mqtt
+	./services/output/grpc-push
+	./services/output/http-push
+	./services/output/influxdb3
+	./services/output/mqtt
 )

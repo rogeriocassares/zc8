@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"log"
 
-	pb "github.com/rogeriocassares/zc8/packages/proto/telemetry/v1"
-
 	"github.com/rogeriocassares/zc8/packages/go-data"
 )
 
@@ -68,18 +66,14 @@ func (p *PayloadProcessor) ProcessBinaryPayload(payload []byte, deviceID string,
 	return msg, nil
 }
 
-// ToProtoFields converts NormalizedMessage fields to protocol buffer format
-func (p *PayloadProcessor) ToProtoFields(msg *data.NormalizedMessage) []*pb.ParsedField {
-	protoFields := make([]*pb.ParsedField, 0, len(msg.Fields))
-
+// ToFields converts NormalizedMessage fields to a key-value map.
+// Callers should build SensorField proto messages from this map directly.
+func (p *PayloadProcessor) ToFields(msg *data.NormalizedMessage) map[string]float64 {
+	out := make(map[string]float64, len(msg.Fields))
 	for key, value := range msg.Fields {
-		protoFields = append(protoFields, &pb.ParsedField{
-			Key:   key,
-			Value: value,
-		})
+		out[key] = value
 	}
-
-	return protoFields
+	return out
 }
 
 // RegisterParser registers a parser for a specific ID

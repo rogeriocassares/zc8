@@ -116,24 +116,25 @@ func (d *DeviceData) CanIngestMessage() (bool, string) {
 }
 
 // MultiTierCache implements engine.DeviceCache with three tiers:
-// 1. LRU (hot, in-memory)
-// 2. Redis (warm, distributed)
-// 3. PostgreSQL (cold, persistent)
+// 1. LRU (hot, in-memory, nanoseconds)
+// 2. NATS KV (warm, distributed, ~1-5 ms, JetStream-backed)
+// 3. PostgreSQL (cold, persistent, ~10-50 ms)
 type MultiTierCache struct {
 	lru        *LRUCache
-	redis      *RedisCache
+	warm       *NATSKVCache
 	repository DeviceRepository
 
 	// Metrics
 	hitLRU   uint64
-	hitRedis uint64
+	hitWarm  uint64
 	missCold uint64
 }
 
-// NewMultiTierCache creates a new three-tier cache
+// NewMultiTierCache creates a new three-tier cache.
+// Pass a non-nil NATSKVCache as the warm tier; pass nil to run LRU → PostgreSQL only.
 func NewMultiTierCache(
 	lruSize int,
-	redis *RedisCache,
+	warm *NATSKVCache,
 	repo DeviceRepository,
 ) (*MultiTierCache, error) {
 	lru, err := NewLRUCache(lruSize)
@@ -143,7 +144,7 @@ func NewMultiTierCache(
 
 	return &MultiTierCache{
 		lru:        lru,
-		redis:      redis,
+		warm:       warm,
 		repository: repo,
 	}, nil
 }
@@ -157,15 +158,16 @@ func (m *MultiTierCache) Get(deviceKey DeviceKey) (DeviceMeta, bool) {
 		return DeviceMeta{ParserID: data.ParserID(meta.ParserID)}, true
 	}
 
-	// L2: Check Redis (warm, milliseconds)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	if meta, err := m.redis.Get(ctx, uint64(deviceKey)); err == nil && meta != nil {
-		m.hitRedis++
-		// Repopulate LRU from Redis hit
-		m.lru.Set(uint64(deviceKey), meta)
-		return DeviceMeta{ParserID: data.ParserID(meta.ParserID)}, true
+	// L2: Check NATS KV warm cache (~1-5 ms)
+	if m.warm != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		if meta, err := m.warm.Get(ctx, uint64(deviceKey)); err == nil && meta != nil {
+			m.hitWarm++
+			// Repopulate LRU from NATS KV hit
+			m.lru.Set(uint64(deviceKey), meta)
+			return DeviceMeta{ParserID: data.ParserID(meta.ParserID)}, true
+		}
 	}
 
 	// L3: Query PostgreSQL (cold, 5+ milliseconds, but source of truth)
@@ -189,12 +191,14 @@ func (m *MultiTierCache) Get(deviceKey DeviceKey) (DeviceMeta, bool) {
 
 	m.lru.Set(uint64(deviceKey), meta)
 
-	// Async Redis update to avoid blocking
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = m.redis.Set(ctx, uint64(deviceKey), meta)
-	}()
+	// Async NATS KV update to avoid blocking the caller
+	if m.warm != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = m.warm.Set(ctx, uint64(deviceKey), meta)
+		}()
+	}
 
 	m.missCold++
 	return DeviceMeta{ParserID: data.ParserID(device.ParserID)}, true
@@ -220,10 +224,10 @@ func (m *MultiTierCache) WarmCache(ctx context.Context) error {
 		m.lru.Set(d.ID, meta)
 	}
 
-	// Populate Redis
-	if m.redis != nil {
-		if err := m.redis.WarmCache(ctx, lruMap); err != nil {
-			return fmt.Errorf("failed to warm Redis cache: %w", err)
+	// Populate NATS KV warm tier
+	if m.warm != nil {
+		if err := m.warm.WarmAll(ctx, lruMap); err != nil {
+			return fmt.Errorf("failed to warm NATS KV cache: %w", err)
 		}
 	}
 
@@ -234,9 +238,9 @@ func (m *MultiTierCache) WarmCache(ctx context.Context) error {
 func (m *MultiTierCache) InvalidateDevice(ctx context.Context, deviceKey DeviceKey) error {
 	m.lru.Del(uint64(deviceKey))
 
-	if m.redis != nil {
-		if err := m.redis.Del(ctx, uint64(deviceKey)); err != nil {
-			return fmt.Errorf("failed to invalidate Redis: %w", err)
+	if m.warm != nil {
+		if err := m.warm.Del(ctx, uint64(deviceKey)); err != nil {
+			return fmt.Errorf("failed to invalidate NATS KV: %w", err)
 		}
 	}
 
@@ -255,19 +259,19 @@ func (m *MultiTierCache) UpdateDevice(
 
 	m.lru.Set(uint64(deviceKey), deviceMeta)
 
-	if m.redis != nil {
-		if err := m.redis.Set(ctx, uint64(deviceKey), deviceMeta); err != nil {
-			return fmt.Errorf("failed to update Redis: %w", err)
+	if m.warm != nil {
+		if err := m.warm.Set(ctx, uint64(deviceKey), deviceMeta); err != nil {
+			return fmt.Errorf("failed to update NATS KV: %w", err)
 		}
 	}
 
 	return nil
 }
 
-// GetMetrics returns cache performance metrics
+// CacheMetrics tracks cache performance across all tiers.
 type CacheMetrics struct {
 	HitLRU   uint64
-	HitRedis uint64
+	HitWarm  uint64 // NATS KV warm tier
 	MissCold uint64
 	TotalOps uint64
 	HitRate  float64
@@ -275,15 +279,15 @@ type CacheMetrics struct {
 }
 
 func (m *MultiTierCache) GetMetrics() CacheMetrics {
-	total := m.hitLRU + m.hitRedis + m.missCold
+	total := m.hitLRU + m.hitWarm + m.missCold
 	hitRate := 0.0
 	if total > 0 {
-		hitRate = float64(m.hitLRU+m.hitRedis) / float64(total) * 100
+		hitRate = float64(m.hitLRU+m.hitWarm) / float64(total) * 100
 	}
 
 	return CacheMetrics{
 		HitLRU:   m.hitLRU,
-		HitRedis: m.hitRedis,
+		HitWarm:  m.hitWarm,
 		MissCold: m.missCold,
 		TotalOps: total,
 		HitRate:  hitRate,

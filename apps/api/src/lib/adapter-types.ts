@@ -65,6 +65,15 @@ export enum AdapterHealthStatus {
 }
 
 // ============================================================
+// Database Interface (wraps pg.Pool with convenience helpers)
+// ============================================================
+
+export interface Database {
+  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
+  queryOne<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T | null>;
+}
+
+// ============================================================
 // Database Models
 // ============================================================
 

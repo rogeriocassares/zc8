@@ -3,12 +3,13 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/redis/go-redis/v9"
+	infranats "github.com/rogeriocassares/zc8/packages/go-infra/nats"
 )
 
 // stringLRUCache implements hot tier with string keys
@@ -50,68 +51,67 @@ func (s *stringLRUCache) Del(key string) {
 	s.cache.Remove(key)
 }
 
-// stringRedisCache implements warm tier with string keys and JSON serialization
-type stringRedisCache struct {
-	client *redis.Client
-	ttl    time.Duration
-	prefix string
+// stringKVCache implements warm tier with string keys backed by NATS JetStream KV.
+type stringKVCache struct {
+	store *infranats.KVStore
 }
 
-// newStringRedisCache creates a string-keyed Redis cache
-func newStringRedisCache(client *redis.Client, ttl time.Duration, prefix string) *stringRedisCache {
-	if ttl == 0 {
+// newStringKVCache creates a NATS KV-backed string cache for a given entity namespace.
+func newStringKVCache(ctx context.Context, client *infranats.JetStreamClient, prefix string, ttl time.Duration) (*stringKVCache, error) {
+	if ttl <= 0 {
 		ttl = 30 * time.Minute
 	}
 	if prefix == "" {
-		prefix = "cache"
+		prefix = "entity"
 	}
-	return &stringRedisCache{
-		client: client,
-		ttl:    ttl,
-		prefix: prefix,
+	// KV bucket names: alphanumeric + hyphens only
+	bucket := fmt.Sprintf("entity-%s", prefix)
+	store, err := infranats.NewKVStore(ctx, client, infranats.KVConfig{
+		Bucket:   bucket,
+		TTL:      ttl,
+		Replicas: 1,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("nats kv init for %s: %w", prefix, err)
 	}
+	return &stringKVCache{store: store}, nil
 }
 
-// Get retrieves from Redis cache with JSON deserialization
-func (s *stringRedisCache) Get(ctx context.Context, key string) (interface{}, error) {
-	fullKey := fmt.Sprintf("%s:%s", s.prefix, key)
-	val, err := s.client.Get(ctx, fullKey).Result()
-	if err == redis.Nil {
-		return nil, nil
-	}
+// Get retrieves from NATS KV warm cache with JSON deserialization.
+func (s *stringKVCache) Get(ctx context.Context, key string) (interface{}, error) {
+	data, err := s.store.Get(ctx, key)
 	if err != nil {
+		if errors.Is(err, infranats.ErrKeyNotFound) {
+			return nil, nil // cache miss — not an error
+		}
 		return nil, err
 	}
-
-	// Deserialize as generic interface{}
 	var result interface{}
-	if err := json.Unmarshal([]byte(val), &result); err != nil {
-		return nil, fmt.Errorf("unmarshal redis value for %s: %w", key, err)
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal kv value for %s: %w", key, err)
 	}
 	return result, nil
 }
 
-// Set stores in Redis cache with JSON serialization
-func (s *stringRedisCache) Set(ctx context.Context, key string, val interface{}) error {
-	fullKey := fmt.Sprintf("%s:%s", s.prefix, key)
+// Set stores in NATS KV warm cache with JSON serialization.
+func (s *stringKVCache) Set(ctx context.Context, key string, val interface{}) error {
 	data, err := json.Marshal(val)
 	if err != nil {
 		return fmt.Errorf("marshal value for %s: %w", key, err)
 	}
-	return s.client.Set(ctx, fullKey, data, s.ttl).Err()
+	return s.store.Put(ctx, key, data)
 }
 
-// Del removes from Redis cache
-func (s *stringRedisCache) Del(ctx context.Context, key string) error {
-	fullKey := fmt.Sprintf("%s:%s", s.prefix, key)
-	return s.client.Del(ctx, fullKey).Err()
+// Del removes from NATS KV warm cache.
+func (s *stringKVCache) Del(ctx context.Context, key string) error {
+	return s.store.Delete(ctx, key)
 }
 
-// GenericResolver implements 3-tier caching for any entity type
-// Provides cascading lookup: LRU → Redis → Database
+// GenericResolver implements 3-tier caching for any entity type.
+// Provides cascading lookup: LRU → NATS KV → Database
 type GenericResolver struct {
 	lru        *stringLRUCache
-	redis      *stringRedisCache
+	warm       *stringKVCache
 	repository GenericRepository
 	mu         sync.RWMutex
 	metrics    ResolverMetrics
@@ -120,7 +120,7 @@ type GenericResolver struct {
 // ResolverMetrics tracks cache performance
 type ResolverMetrics struct {
 	HitLRU   uint64
-	HitRedis uint64
+	HitWarm  uint64 // NATS KV warm tier
 	MissCold uint64
 	TotalOps uint64
 	HitRate  float64
@@ -157,23 +157,27 @@ type ReverseIndexRepository interface {
 	GetIndexes() []string
 }
 
-// NewGenericResolver creates a new generic resolver with 3-tier caching
+// NewGenericResolver creates a new generic resolver with 3-tier caching.
+// jsClient is the NATS JetStream client used for the warm tier.
 func NewGenericResolver(
-	redisClient *redis.Client,
+	ctx context.Context,
+	jsClient *infranats.JetStreamClient,
 	repository GenericRepository,
 	lruSize int,
 ) (*GenericResolver, error) {
-	// Create string-based caches
-	lru, err := newStringLRUCache(lruSize)
+	lruCache, err := newStringLRUCache(lruSize)
 	if err != nil {
 		return nil, err
 	}
 
-	redis := newStringRedisCache(redisClient, 30*time.Minute, "entity")
+	warm, err := newStringKVCache(ctx, jsClient, "entity", 30*time.Minute)
+	if err != nil {
+		return nil, fmt.Errorf("generic resolver warm tier: %w", err)
+	}
 
 	return &GenericResolver{
-		lru:        lru,
-		redis:      redis,
+		lru:        lruCache,
+		warm:       warm,
 		repository: repository,
 	}, nil
 }
@@ -188,9 +192,9 @@ func (g *GenericResolver) Resolve(ctx context.Context, id string) (interface{}, 
 		return val, nil
 	}
 
-	// L2: Redis Cache (warm tier)
-	if val, err := g.redis.Get(ctx, id); err == nil && val != nil {
-		g.recordRedisHit()
+	// L2: NATS KV warm tier
+	if val, err := g.warm.Get(ctx, id); err == nil && val != nil {
+		g.recordWarmHit()
 		// Populate L1
 		g.lru.Set(id, val)
 		return val, nil
@@ -210,7 +214,7 @@ func (g *GenericResolver) Resolve(ctx context.Context, id string) (interface{}, 
 
 	// Populate both warm and hot tiers
 	g.lru.Set(id, entity)
-	_ = g.redis.Set(ctx, id, entity) // Best-effort async population
+	_ = g.warm.Set(ctx, id, entity) // best-effort
 
 	return entity, nil
 }
@@ -233,8 +237,8 @@ func (g *GenericResolver) ResolveByIndex(ctx context.Context, indexKey string, v
 		return val, nil
 	}
 
-	if val, err := g.redis.Get(ctx, cacheKey); err == nil && val != nil {
-		g.recordRedisHit()
+	if val, err := g.warm.Get(ctx, cacheKey); err == nil && val != nil {
+		g.recordWarmHit()
 		g.lru.Set(cacheKey, val)
 		return val, nil
 	}
@@ -259,7 +263,7 @@ func (g *GenericResolver) ResolveByIndex(ctx context.Context, indexKey string, v
 
 	// Populate cache with both forward and reverse keys
 	g.lru.Set(cacheKey, entity)
-	_ = g.redis.Set(ctx, cacheKey, entity)
+	_ = g.warm.Set(ctx, cacheKey, entity)
 
 	return entity, nil
 }
@@ -286,7 +290,7 @@ func (g *GenericResolver) WarmCache(ctx context.Context) error {
 
 		if id != "" {
 			g.lru.Set(id, entity)
-			_ = g.redis.Set(ctx, id, entity)
+			_ = g.warm.Set(ctx, id, entity)
 		}
 	}
 
@@ -325,7 +329,7 @@ func (g *GenericResolver) WarmCacheWithIndexes(ctx context.Context) error {
 			indexValue := fmt.Sprintf("%v", m[indexKey])
 			cacheKey := fmt.Sprintf("%s:%s", indexKey, indexValue)
 			g.lru.Set(cacheKey, entity)
-			_ = g.redis.Set(ctx, cacheKey, entity)
+			_ = g.warm.Set(ctx, cacheKey, entity)
 		}
 	}
 
@@ -335,14 +339,14 @@ func (g *GenericResolver) WarmCacheWithIndexes(ctx context.Context) error {
 // InvalidateEntry removes entity from all cache tiers
 func (g *GenericResolver) InvalidateEntry(ctx context.Context, id string) error {
 	g.lru.Del(id)
-	_ = g.redis.Del(ctx, id)
+	_ = g.warm.Del(ctx, id)
 	return nil
 }
 
 // UpdateEntry updates entity in all cache tiers
 func (g *GenericResolver) UpdateEntry(ctx context.Context, id string, entity interface{}) error {
 	g.lru.Set(id, entity)
-	_ = g.redis.Set(ctx, id, entity)
+	_ = g.warm.Set(ctx, id, entity)
 	return nil
 }
 
@@ -353,7 +357,7 @@ func (g *GenericResolver) Metrics() ResolverMetrics {
 
 	metrics := g.metrics
 	if metrics.TotalOps > 0 {
-		metrics.HitRate = float64(metrics.HitLRU+metrics.HitRedis) / float64(metrics.TotalOps) * 100
+		metrics.HitRate = float64(metrics.HitLRU+metrics.HitWarm) / float64(metrics.TotalOps) * 100
 	}
 	return metrics
 }
@@ -372,11 +376,11 @@ func (g *GenericResolver) recordLRUHit() {
 	g.metrics.HitLRU++
 }
 
-// recordRedisHit records a Redis cache hit
-func (g *GenericResolver) recordRedisHit() {
+// recordWarmHit records a NATS KV warm cache hit
+func (g *GenericResolver) recordWarmHit() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.metrics.HitRedis++
+	g.metrics.HitWarm++
 }
 
 // recordMiss records a database hit/miss

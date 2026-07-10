@@ -55,7 +55,7 @@ type OutputAdapter interface {
 	Start(ctx context.Context) error
 
 	// SendEvent sends a normalized event to external target
-	SendEvent(event *pb.IngestRequest) error
+	SendEvent(event *pb.IngestEnvelope) error
 
 	// Stop gracefully stops the adapter
 	Stop() error

@@ -35,14 +35,14 @@ func DefaultIngestBatchClientConfig() IngestBatchClientConfig {
 	}
 }
 
-// IngestBatchClient batches IngestRequests and forwards them to the ingest
+// IngestBatchClient batches IngestEnvelopes and forwards them to the ingest
 // service using the IngestBatch RPC. It accumulates messages in a channel
 // and flushes when batchSize is reached or flushInterval expires.
 type IngestBatchClient struct {
 	conn   *grpc.ClientConn
 	client pb.TelemetryIngestServiceClient
 
-	batchCh       chan *pb.IngestRequest
+	batchCh       chan *pb.IngestEnvelope
 	batchSize     int
 	flushInterval time.Duration
 
@@ -77,7 +77,7 @@ func NewIngestBatchClient(cfg IngestBatchClientConfig, logger *log.Logger) (*Ing
 	ic := &IngestBatchClient{
 		conn:          conn,
 		client:        pb.NewTelemetryIngestServiceClient(conn),
-		batchCh:       make(chan *pb.IngestRequest, cfg.QueueSize),
+		batchCh:       make(chan *pb.IngestEnvelope, cfg.QueueSize),
 		batchSize:     cfg.BatchSize,
 		flushInterval: cfg.FlushInterval,
 		stopCh:        make(chan struct{}),
@@ -93,11 +93,11 @@ func NewIngestBatchClient(cfg IngestBatchClientConfig, logger *log.Logger) (*Ing
 	return ic, nil
 }
 
-// Submit enqueues an IngestRequest for batched delivery.
+// Submit enqueues an IngestEnvelope for batched delivery.
 // Non-blocking: returns false if the queue is full (backpressure signal).
-func (ic *IngestBatchClient) Submit(req *pb.IngestRequest) bool {
+func (ic *IngestBatchClient) Submit(env *pb.IngestEnvelope) bool {
 	select {
-	case ic.batchCh <- req:
+	case ic.batchCh <- env:
 		return true
 	default:
 		return false
@@ -108,7 +108,7 @@ func (ic *IngestBatchClient) Submit(req *pb.IngestRequest) bool {
 func (ic *IngestBatchClient) flushLoop() {
 	defer ic.wg.Done()
 
-	batch := make([]*pb.IngestRequest, 0, ic.batchSize)
+	batch := make([]*pb.IngestEnvelope, 0, ic.batchSize)
 	ticker := time.NewTicker(ic.flushInterval)
 	defer ticker.Stop()
 
@@ -121,7 +121,7 @@ func (ic *IngestBatchClient) flushLoop() {
 		defer cancel()
 
 		batchReq := &pb.IngestBatchRequest{
-			Requests: batch,
+			Envelopes: batch,
 		}
 
 		ack, err := ic.client.IngestBatch(ctx, batchReq)
@@ -136,8 +136,8 @@ func (ic *IngestBatchClient) flushLoop() {
 
 	for {
 		select {
-		case req := <-ic.batchCh:
-			batch = append(batch, req)
+		case env := <-ic.batchCh:
+			batch = append(batch, env)
 			if len(batch) >= ic.batchSize {
 				flush()
 			}
@@ -149,8 +149,8 @@ func (ic *IngestBatchClient) flushLoop() {
 			// Drain remaining messages
 			for {
 				select {
-				case req := <-ic.batchCh:
-					batch = append(batch, req)
+				case env := <-ic.batchCh:
+					batch = append(batch, env)
 				default:
 					flush()
 					return

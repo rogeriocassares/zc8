@@ -489,13 +489,4 @@ export function getAllSchemasByType(type: string): VendorSchema[] {
     return key.startsWith(type);
   });
 }
-export function getAllVendorSchemas(): VendorSchema[] {
-  return Object.values(VENDOR_SCHEMAS);
-}
 
-export function getAllSchemasByType(type: string): VendorSchema[] {
-  return Object.values(VENDOR_SCHEMAS).filter((schema) => {
-    const key = `${schema.type}/${schema.vendor}`;
-    return key.startsWith(type);
-  });
-}

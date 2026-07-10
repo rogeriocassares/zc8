@@ -1,0 +1,115 @@
+[tools]
+# Runtime versions (install with `mise install`)
+bun = "1.3.2"
+go = "1.25.5"
+node = "22"
+
+[env]
+# Loaded from repo root .env by default.
+# These match the CLAUDE.md defaults for local dev.
+NATS_URL = "nats://localhost:4222"
+NATS_WS_URL = "ws://localhost:4223"
+DATABASE_URL = "postgres://postgres:postgres@localhost:5432/zc8?sslmode=disable"
+
+# ─── Individual service tasks ──────────────────────────────────────────────────
+
+[tasks."dev:web"]
+description = "Start Next.js dashboard (port 3000)"
+run = "cd apps/web && pnpm dev"
+
+[tasks."dev:api"]
+description = "Start Elysia API (port 3333)"
+run = "cd apps/api && bun dev"
+
+[tasks."dev:input-mqtt"]
+description = "Start MQTT input adapter"
+run = "go run ./services/input/mqtt/cmd/mqtt/"
+
+[tasks."dev:input-http-server"]
+description = "Start HTTP-server input adapter"
+run = "go run ./services/input/http-server/cmd/http-server/"
+
+[tasks."dev:input-http-pull"]
+description = "Start HTTP-pull input adapter"
+run = "go run ./services/input/http-pull/cmd/http-pull/"
+
+[tasks."dev:input-grpc-server"]
+description = "Start gRPC-server input adapter"
+run = "go run ./services/input/grpc-server/cmd/grpc-server/"
+
+[tasks."dev:input-grpc-pull"]
+description = "Start gRPC-pull input adapter"
+run = "go run ./services/input/grpc-pull/cmd/grpc-pull/"
+
+[tasks."dev:output-influxdb3"]
+description = "Start InfluxDB3 output adapter"
+run = "go run ./services/output/influxdb3/cmd/influxdb3/"
+
+[tasks."dev:output-mqtt"]
+description = "Start MQTT output adapter"
+run = "go run ./services/output/mqtt/cmd/mqtt/"
+
+[tasks."dev:output-http-push"]
+description = "Start HTTP-push output adapter"
+run = "go run ./services/output/http-push/cmd/http-push/"
+
+[tasks."dev:output-grpc-push"]
+description = "Start gRPC-push output adapter"
+run = "go run ./services/output/grpc-push/cmd/grpc-push/"
+
+# ─── Composite tasks ───────────────────────────────────────────────────────────
+
+[tasks.dev]
+description = "Start all services via overmind (requires: brew install overmind)"
+run = "overmind start -f Procfile"
+
+[tasks."dev:frontend"]
+description = "Start only the web + API (no Go services)"
+depends = ["dev:web", "dev:api"]
+
+[tasks."dev:inputs"]
+description = "Start all input adapters"
+depends = [
+  "dev:input-mqtt",
+  "dev:input-http-server",
+  "dev:input-http-pull",
+  "dev:input-grpc-server",
+  "dev:input-grpc-pull",
+]
+
+[tasks."dev:outputs"]
+description = "Start all output adapters"
+depends = [
+  "dev:output-influxdb3",
+  "dev:output-mqtt",
+  "dev:output-http-push",
+  "dev:output-grpc-push",
+]
+
+# ─── Infrastructure ────────────────────────────────────────────────────────────
+
+[tasks."infra:up"]
+description = "Start Docker infra (postgres, NATS, InfluxDB3)"
+run = "docker compose -f infra/docker/docker-compose.yaml up -d"
+
+[tasks."infra:down"]
+description = "Stop and wipe Docker infra (re-runs init scripts on next start)"
+run = "docker compose -f infra/docker/docker-compose.yaml down -v"
+
+[tasks."infra:logs"]
+description = "Tail infra logs"
+run = "docker compose -f infra/docker/docker-compose.yaml logs -f"
+
+# ─── Database ──────────────────────────────────────────────────────────────────
+
+[tasks."db:push"]
+description = "Push Drizzle schema to database (no migration files)"
+run = "cd apps/api && bun run db:push"
+
+[tasks."db:migrate"]
+description = "Apply pending Drizzle migrations"
+run = "cd apps/api && bun run db:migrate"
+
+[tasks."db:generate"]
+description = "Generate Drizzle migration files from schema"
+run = "cd apps/api && bun run db:generate"

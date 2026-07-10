@@ -2,6 +2,8 @@ import * as crypto from "crypto";
 import type { Context } from "elysia";
 import type { Pool } from "pg";
 
+type ExtendedContext = Context & { auth?: UserAuthPayload };
+
 /**
  * User JWT payload with RBAC context
  */
@@ -29,11 +31,9 @@ export interface UserAuthPayload {
  * Validates tokens and extracts user context from JWT payload
  */
 export class AuthMiddleware {
-  private signingKey: string;
-  private pgPool: Pool;
+  private readonly signingKey: string;
 
-  constructor(pgPool: Pool, signingKey?: string) {
-    this.pgPool = pgPool;
+  constructor(_pgPool: Pool, signingKey?: string) {
     this.signingKey =
       signingKey ||
       process.env.JWT_SECRET ||
@@ -63,7 +63,7 @@ export class AuthMiddleware {
     const now = Math.floor(Date.now() / 1000);
     const exp = now + expiresInHours * 3600;
 
-    const payload: Partial<UserAuthPayload> = {
+    const payload: Record<string, unknown> = {
       userId,
       email,
       organizationId: organizationId.toString(),
@@ -211,27 +211,29 @@ export class AuthMiddleware {
   createAuthGuard() {
     return async (ctx: Context) => {
       const authHeader = ctx.request.headers.get("Authorization");
-      const token = this.extractTokenFromHeader(authHeader);
+      const token = this.extractTokenFromHeader(authHeader ?? undefined);
 
       if (!token) {
-        return ctx.error(401, {
+        (ctx as ExtendedContext).set.status = 401;
+        return {
           success: false,
           error: "Missing authorization token",
           code: "UNAUTHORIZED",
-        });
+        };
       }
 
       const payload = this.validateToken(token);
       if (!payload) {
-        return ctx.error(401, {
+        (ctx as ExtendedContext).set.status = 401;
+        return {
           success: false,
           error: "Invalid or expired token",
           code: "INVALID_TOKEN",
-        });
+        };
       }
 
       // Store auth context in request for use in route handlers
-      (ctx as any).auth = payload;
+      (ctx as ExtendedContext).auth = payload;
     };
   }
 
@@ -240,22 +242,24 @@ export class AuthMiddleware {
    */
   requireScope(requiredScope: string) {
     return async (ctx: Context) => {
-      const auth = (ctx as any).auth as UserAuthPayload | undefined;
+      const auth = (ctx as ExtendedContext).auth;
 
       if (!auth) {
-        return ctx.error(401, {
+        (ctx as ExtendedContext).set.status = 401;
+        return {
           success: false,
           error: "Not authenticated",
           code: "UNAUTHORIZED",
-        });
+        };
       }
 
       if (!auth.scopes.includes(requiredScope)) {
-        return ctx.error(403, {
+        (ctx as ExtendedContext).set.status = 403;
+        return {
           success: false,
           error: `Missing required scope: ${requiredScope}`,
           code: "INSUFFICIENT_PERMISSIONS",
-        });
+        };
       }
     };
   }
@@ -265,22 +269,24 @@ export class AuthMiddleware {
    */
   requireOrgAdmin() {
     return async (ctx: Context) => {
-      const auth = (ctx as any).auth as UserAuthPayload | undefined;
+      const auth = (ctx as ExtendedContext).auth;
 
       if (!auth) {
-        return ctx.error(401, {
+        (ctx as ExtendedContext).set.status = 401;
+        return {
           success: false,
           error: "Not authenticated",
           code: "UNAUTHORIZED",
-        });
+        };
       }
 
-      if (!["owner", "admin"].includes(auth.memberRole)) {
-        return ctx.error(403, {
+      if (!['owner', 'admin'].includes(auth.memberRole)) {
+        (ctx as ExtendedContext).set.status = 403;
+        return {
           success: false,
           error: "Organization admin access required",
           code: "INSUFFICIENT_PERMISSIONS",
-        });
+        };
       }
     };
   }
@@ -290,22 +296,24 @@ export class AuthMiddleware {
    */
   requireTeamAdmin() {
     return async (ctx: Context) => {
-      const auth = (ctx as any).auth as UserAuthPayload | undefined;
+      const auth = (ctx as ExtendedContext).auth;
 
       if (!auth) {
-        return ctx.error(401, {
+        (ctx as ExtendedContext).set.status = 401;
+        return {
           success: false,
           error: "Not authenticated",
           code: "UNAUTHORIZED",
-        });
+        };
       }
 
-      if (!["teamowner", "teamadmin"].includes(auth.memberRole)) {
-        return ctx.error(403, {
+      if (!['teamowner', 'teamadmin'].includes(auth.memberRole)) {
+        (ctx as ExtendedContext).set.status = 403;
+        return {
           success: false,
           error: "Team admin access required",
           code: "INSUFFICIENT_PERMISSIONS",
-        });
+        };
       }
     };
   }
@@ -316,12 +324,12 @@ export class AuthMiddleware {
   createOptionalAuthGuard() {
     return async (ctx: Context) => {
       const authHeader = ctx.request.headers.get("Authorization");
-      const token = this.extractTokenFromHeader(authHeader);
+      const token = this.extractTokenFromHeader(authHeader ?? undefined);
 
       if (token) {
         const payload = this.validateToken(token);
         if (payload) {
-          (ctx as any).auth = payload;
+          (ctx as ExtendedContext).auth = payload;
         }
       }
     };

@@ -18,9 +18,11 @@ export interface LoginCredentials {
 export interface AuthSession {
   userId: string;
   email: string;
-  organizationId: string;
-  organizationName: string;
-  memberRole: 'admin' | 'editor' | 'viewer';
+  platformRole: 'superAdmin' | 'user';
+  userPlan?: string;
+  organizationId: number | null;
+  organizationName: string | null;
+  memberRole: 'owner' | 'admin' | 'member' | null;
   token: string;
   tokenExpires: number;
 }
@@ -157,18 +159,25 @@ class AuthClient {
     return !!this.session && this.session.tokenExpires > Date.now();
   }
 
+  isSuperAdmin(): boolean {
+    return this.session?.platformRole === 'superAdmin';
+  }
+
   canRead(resource: string): boolean {
-    const roles = ['admin', 'editor', 'viewer'];
-    return this.session ? roles.includes(this.session.memberRole) : false;
+    if (this.isSuperAdmin()) return true;
+    const allowedRoles = ['owner', 'admin', 'member'];
+    return this.session?.memberRole ? allowedRoles.includes(this.session.memberRole) : false;
   }
 
   canWrite(resource: string): boolean {
-    const roles = ['admin', 'editor'];
-    return this.session ? roles.includes(this.session.memberRole) : false;
+    if (this.isSuperAdmin()) return true;
+    const allowedRoles = ['owner', 'admin'];
+    return this.session?.memberRole ? allowedRoles.includes(this.session.memberRole) : false;
   }
 
   canAdmin(): boolean {
-    return this.session?.memberRole === 'admin';
+    if (this.isSuperAdmin()) return true;
+    return this.session?.memberRole === 'owner' || this.session?.memberRole === 'admin';
   }
 }
 

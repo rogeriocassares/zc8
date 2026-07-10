@@ -529,7 +529,7 @@ export function DeviceCreationForm() {
                     : "border-gray-300"
                 }`}
                 required
-                maxLength="16"
+                maxLength={16}
               />
               <p className="mt-1 text-xs text-gray-500">
                 8 bytes = 16 hexadecimal characters (0-9, A-F)

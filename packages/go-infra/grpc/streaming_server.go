@@ -10,9 +10,9 @@ import (
 	"google.golang.org/grpc"
 )
 
-// IngestRequestHandler is the interface for handling ingest requests
-type IngestRequestHandler interface {
-	HandleIngestRequest(ctx context.Context, req *pb.IngestRequest) (*pb.IngestAck, error)
+// IngestEnvelopeHandler is the interface for handling ingest envelopes
+type IngestEnvelopeHandler interface {
+	HandleIngestEnvelope(ctx context.Context, env *pb.IngestEnvelope) (*pb.IngestAck, error)
 }
 
 // StreamingServerConfig holds configuration for streaming server
@@ -29,10 +29,10 @@ func DefaultStreamingServerConfig() StreamingServerConfig {
 	}
 }
 
-// StreamingServer handles bidirectional streaming for ingest requests
+// StreamingServer handles bidirectional streaming for ingest envelopes
 type StreamingServer struct {
 	config  StreamingServerConfig
-	handler IngestRequestHandler
+	handler IngestEnvelopeHandler
 	logger  *log.Logger
 
 	statsMu        sync.RWMutex
@@ -44,7 +44,7 @@ type StreamingServer struct {
 // NewStreamingServer creates a new streaming server
 func NewStreamingServer(
 	config StreamingServerConfig,
-	handler IngestRequestHandler,
+	handler IngestEnvelopeHandler,
 	logger *log.Logger,
 ) *StreamingServer {
 	return &StreamingServer{
@@ -55,11 +55,11 @@ func NewStreamingServer(
 }
 
 // IngestStream implements the bidirectional streaming RPC
-func (ss *StreamingServer) IngestStream(stream grpc.BidiStreamingServer[pb.IngestRequest, pb.IngestAck]) error {
+func (ss *StreamingServer) IngestStream(stream grpc.BidiStreamingServer[pb.IngestEnvelope, pb.IngestAck]) error {
 	ss.logger.Println("[StreamingServer] New ingest stream connected")
 
 	ctx := stream.Context()
-	requestChan := make(chan *pb.IngestRequest, ss.config.NumWorkers*2)
+	requestChan := make(chan *pb.IngestEnvelope, ss.config.NumWorkers*2)
 	ackChan := make(chan *pb.IngestAck, ss.config.NumWorkers*2)
 	errChan := make(chan error, 1)
 
@@ -91,11 +91,11 @@ func (ss *StreamingServer) IngestStream(stream grpc.BidiStreamingServer[pb.Inges
 	return nil
 }
 
-// receiveRequests reads requests from the stream until error or context done
+// receiveRequests reads envelopes from the stream until error or context done
 func (ss *StreamingServer) receiveRequests(
 	ctx context.Context,
 	stream grpc.ServerStream,
-	requestChan chan<- *pb.IngestRequest,
+	requestChan chan<- *pb.IngestEnvelope,
 	errChan chan<- error,
 ) {
 	for {
@@ -106,8 +106,8 @@ func (ss *StreamingServer) receiveRequests(
 		default:
 		}
 
-		var req pb.IngestRequest
-		if err := stream.RecvMsg(&req); err != nil {
+		var env pb.IngestEnvelope
+		if err := stream.RecvMsg(&env); err != nil {
 			close(requestChan)
 			if err.Error() != "EOF" {
 				ss.logger.Printf("[StreamingServer] Receive error: %v", err)
@@ -121,11 +121,11 @@ func (ss *StreamingServer) receiveRequests(
 		ss.statsMu.Unlock()
 
 		if ss.config.EnableDetailedLogging {
-			ss.logger.Printf("[StreamingServer] Received request: %s from device %d", req.EventId, req.DeviceKey)
+			ss.logger.Printf("[StreamingServer] Received envelope: %s from device %d", env.EventId, env.DeviceKey)
 		}
 
 		select {
-		case requestChan <- &req:
+		case requestChan <- &env:
 		case <-ctx.Done():
 			close(requestChan)
 			return
@@ -133,11 +133,11 @@ func (ss *StreamingServer) receiveRequests(
 	}
 }
 
-// processRequests processes incoming requests using worker goroutines
+// processRequests processes incoming envelopes using worker goroutines
 func (ss *StreamingServer) processRequests(
 	ctx context.Context,
 	workerID int,
-	requestChan <-chan *pb.IngestRequest,
+	requestChan <-chan *pb.IngestEnvelope,
 	ackChan chan<- *pb.IngestAck,
 	errChan chan<- error,
 ) {
@@ -153,7 +153,7 @@ func (ss *StreamingServer) processRequests(
 			}
 			return
 
-		case req, ok := <-requestChan:
+		case env, ok := <-requestChan:
 			if !ok {
 				if ss.config.EnableDetailedLogging {
 					ss.logger.Printf("[StreamingServer] Worker %d channel closed", workerID)
@@ -161,7 +161,7 @@ func (ss *StreamingServer) processRequests(
 				return
 			}
 
-			ack, err := ss.handler.HandleIngestRequest(ctx, req)
+			ack, err := ss.handler.HandleIngestEnvelope(ctx, env)
 			if err != nil {
 				ss.logger.Printf("[StreamingServer] Worker %d handler error: %v", workerID, err)
 				ss.statsMu.Lock()
@@ -169,9 +169,9 @@ func (ss *StreamingServer) processRequests(
 				ss.statsMu.Unlock()
 
 				ack = &pb.IngestAck{
-					EventId: req.EventId,
-					Status:  pb.IngestStatus_INGEST_INTERNAL_ERROR,
-					Reason:  fmt.Sprintf("Handler error: %v", err),
+					EventId:  env.EventId,
+					Accepted: false,
+					Reason:   fmt.Sprintf("Handler error: %v", err),
 				}
 			} else {
 				ss.statsMu.Lock()
@@ -231,20 +231,20 @@ func (ss *StreamingServer) Stats() (received, processed, errors uint64) {
 }
 
 // IngestUnary implements the unary RPC (for simple single request-response)
-func (ss *StreamingServer) IngestUnary(ctx context.Context, req *pb.IngestRequest) (*pb.IngestAck, error) {
+func (ss *StreamingServer) IngestUnary(ctx context.Context, env *pb.IngestEnvelope) (*pb.IngestAck, error) {
 	ss.statsMu.Lock()
 	ss.receivedCount++
 	ss.statsMu.Unlock()
 
-	ack, err := ss.handler.HandleIngestRequest(ctx, req)
+	ack, err := ss.handler.HandleIngestEnvelope(ctx, env)
 	if err != nil {
 		ss.statsMu.Lock()
 		ss.errorCount++
 		ss.statsMu.Unlock()
 		return &pb.IngestAck{
-			EventId: req.EventId,
-			Status:  pb.IngestStatus_INGEST_INTERNAL_ERROR,
-			Reason:  err.Error(),
+			EventId:  env.EventId,
+			Accepted: false,
+			Reason:   err.Error(),
 		}, nil
 	}
 

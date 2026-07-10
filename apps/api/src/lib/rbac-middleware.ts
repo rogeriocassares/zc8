@@ -89,7 +89,7 @@ export class RBACMiddleware {
        WHERE om.user_id = $1 AND om.organization_id = $2`,
       [userId, orgId]
     );
-    return result?.name || null;
+    return (result?.name as string | undefined) || null;
   }
 
   /**
@@ -102,7 +102,7 @@ export class RBACMiddleware {
        WHERE tm.user_id = $1 AND tm.team_id = $2`,
       [userId, teamId]
     );
-    return result?.name || null;
+    return (result?.name as string | undefined) || null;
   }
 
   /**

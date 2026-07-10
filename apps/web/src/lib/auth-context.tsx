@@ -12,6 +12,7 @@ interface AuthContextType {
   session: AuthSession | null;
   user: AuthUser | null;
   loading: boolean;
+  isSuperAdmin: boolean;
   login: (
     email: string,
     password: string,
@@ -43,13 +44,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .then((userData) => setUser(userData))
         .catch((err) => {
           console.error("Failed to load user:", err);
-          authClient.logout();
-          setSession(null);
+          // Only clear session on actual auth errors (token expired/invalid),
+          // not on network/server errors — keep session so email is still shown
+          if (
+            err.message === "Session expired" ||
+            err.message === "Not authenticated"
+          ) {
+            authClient.logout();
+            setSession(null);
+          }
         })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
+
+    // Poll every 30 s to detect deactivated accounts
+    const interval = setInterval(() => {
+      if (!authClient.getSession()) return;
+      authClient.getUserOrganizations().catch((err: Error) => {
+        if (
+          err.message === "Session expired" ||
+          err.message === "Not authenticated"
+        ) {
+          setSession(null);
+          setUser(null);
+        }
+      });
+    }, 30_000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const login = async (
@@ -97,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         session,
         user,
         loading,
+        isSuperAdmin: session?.platformRole === "superAdmin",
         login,
         logout,
         switchOrganization,

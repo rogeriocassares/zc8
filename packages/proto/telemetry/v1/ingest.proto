@@ -1,8 +1,21 @@
-// ingest.proto
-// event.proto
-// command.proto
-// device_state.proto
-
+// telemetry/v1/ingest.proto
+//
+// Unified protobuf schema for the zc8 telemetry platform.
+//
+// JetStream subject map (all messages are persisted — no NATS Core):
+//
+//   data.{orgId}.{teamId}.{deviceKey}.raw      – IngestEnvelope (type=PAYLOAD_RAW)
+//   data.{orgId}.{teamId}.{deviceKey}.decoded  – IngestEnvelope (type=PAYLOAD_DECODED)
+//   svc.{orgId}.{svcId}                        – ServiceEvent
+//   cmd.{orgId}.{teamId}.{deviceKey}           – CommandEnvelope
+//
+// Three JetStream streams:
+//   DATA  – captures data.>
+//   SVC   – captures svc.>
+//   CMD   – captures cmd.>
+//
+// Browser consumers use ephemeral ordered JetStream consumers via nats.ws.
+// Browser NATS permissions: subscribe data.{orgId}.> and svc.{orgId}.>
 
 syntax = "proto3";
 
@@ -10,532 +23,301 @@ option go_package = "github.com/rogeriocassares/zc8/packages/proto/telemetry/v1"
 
 package zc8_telemetry_proto_v1;
 
-import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
-// TelemetryIngestService provides RPCs for ingesting telemetry data from devices.
-service TelemetryIngestService {
-  // Ingest accepts a single ingest request and returns a response with the ingest status.
-  rpc IngestUnary(IngestRequest) returns (IngestAck);
-  // IngestStream accepts a stream of ingest requests and returns a single response.
-  rpc IngestStream(stream IngestRequest) returns (stream IngestAck);
-  // IngestBatch accepts a batch of ingest requests for maximum throughput.
-  // Used by transport workers that accumulate messages before forwarding.
-  rpc IngestBatch(IngestBatchRequest) returns (IngestBatchAck);
-}
-
-// CommandService provides RPCs for sending commands to devices.
-service CommandService {
-   // Web/API side
-  // SendCommand sends a command to a device and returns the command ID.
-  rpc SendCommand(SendCommandRequest) returns (SendCommandResponse);
-  // AcknowledgeCommand acknowledges receipt of a command on the device.
-  
-  // Agent side — bidirectional
-  rpc CommandStream(stream CommandStreamMessage)
-  returns (stream CommandStreamMessage);
-}
-
-message CommandStreamMessage {
-
-  oneof message {
-    CommandDispatch dispatch = 1;
-    CommandAck ack = 2;
-    // CommandHeartbeat heartbeat = 3;
-  }
-}
-
-message CommandDispatch {
-  string command_id = 1;
-  string device_id = 2;
-  google.protobuf.Any payload = 3;
-  google.protobuf.Timestamp created_at = 4;
-}
-
-message CommandAck {
-  string command_id = 1;
-  string device_id = 2;
-  bool success = 3;
-  string error = 4;
-  google.protobuf.Timestamp acknowledged_at = 5;
-}
+// ─── Enumerations ─────────────────────────────────────────────────────────────
 
 enum IngestSource {
   SOURCE_UNSPECIFIED = 0;
   SOURCE_MQTT        = 1;
   SOURCE_GRPC        = 2;
-  SOURCE_CLI         = 3;
+  SOURCE_HTTP        = 3;
+  SOURCE_CLI         = 4;
 }
 
-enum IngestStatus {
-  INGEST_STATUS_UNSPECIFIED = 0;
-  INGEST_OK                 = 1;
-  INGEST_DUPLICATE          = 2;
-  INGEST_INVALID            = 3;
-  INGEST_REJECTED           = 4;
-  INGEST_BACKPRESSURE       = 5;
-  INGEST_INTERNAL_ERROR     = 6;
+enum PayloadType {
+  PAYLOAD_UNSPECIFIED = 0;
+  PAYLOAD_RAW         = 1; // Raw bytes from device – primary for audit log
+  PAYLOAD_DECODED     = 2; // Parsed + enriched – streamed to all output services
 }
 
-// ParsedField represents a single parsed measurement field
-// This is sent from adapters after local parsing
-message ParsedField {
-  string key = 1;
-  double value = 2;
+enum ValueType {
+  VALUE_UNSPECIFIED = 0;
+  VALUE_FLOAT       = 1;
+  VALUE_INT         = 2;
+  VALUE_BOOL        = 3;
 }
 
-message IngestRequest {
-  string                    event_id   = 1; // REQUIRED for idempotency
-  google.protobuf.Timestamp timestamp  = 2; // ingestion timestamp
-  IngestSource              source     = 3;
-  
-  // ✅ ROUTING KEY (moved to top-level for O(1) access)
-  // Pre-computed at device creation, used for: shard routing, cache lookup, tenant isolation
-  // Eliminates per-message hash computation (100+ cycles → 1 cycle)
-  uint64 device_key = 8;
-  
-  // Unified adapter payload (one of LNS or MQTT adapter messages)
-  oneof payload {
-    AgentAdapterMessage     agent_message = 4;
-    LNSAdapterMessage     lns_message  = 5;
-    Zc2xAdapterMessage     zc2x_message  = 6;
-    MQTTGatewayMessage    mqtt_message = 7;
-  }
-  
-  // ✅ PRE-PARSED FIELDS: Transport layer already parsed → ingest skips parsing
-  // This is the fast path: transport does gateway+device parse, sends fields directly
-  repeated ParsedField pre_parsed_fields = 9;
-  
-  // ✅ DEVICE CONTEXT: Resolved at transport layer via 3-tier cache
-  // Carries all ingest routing info so ingest engine has ZERO DB lookups on hot path
-  DeviceContext device_context = 10;
+enum ServiceEventType {
+  SVC_EVENT_UNSPECIFIED = 0;
+  SVC_HEARTBEAT         = 1; // Adapter alive
+  SVC_TOMBSTONE         = 2; // Adapter stopped
+  SVC_RAW_INGEST        = 3; // Raw message received (before parsing)
+  SVC_OUTPUT_ACK        = 4; // Output service wrote records
 }
 
-// DeviceContext is resolved at the transport layer from the 3-tier cache
-// (LRU → Redis → PostgreSQL) and attached to every IngestRequest.
-// This eliminates per-message DB lookups at the ingest layer.
+// ─── Device context (resolved from LRU → Redis → Postgres) ───────────────────
+
+// DeviceTags carries physical location and asset classification.
+// Resolved at the transport layer and forwarded as InfluxDB tags on every
+// decoded payload — no Postgres join on the hot path.
+message DeviceTags {
+  double latitude      = 1;
+  double longitude     = 2;
+  double altitude_m    = 3;
+  string location_name = 4;
+  string asset_id      = 5; // arbitrary asset identifier
+  string category      = 6; // "energy" | "water" | "hvac" | "environment" | …
+  map<string, string> extra = 7; // additional custom tags
+}
+
+// SensorCalibration — linear correction for one sensor type.
+// calibrated = raw * scale + offset
+message SensorCalibration {
+  string sensor_type = 1;
+  double scale       = 2; // default 1.0  (no correction)
+  double offset      = 3; // default 0.0
+  string unit        = 4;
+}
+
+// DeviceContext is resolved once at the transport layer and attached to every
+// IngestEnvelope, eliminating per-message DB lookups on the hot path.
 message DeviceContext {
-  uint64 device_key = 1; // Same as IngestRequest.device_key (for validation)
-  int64  organization_id = 2;
-  int64  team_id = 3;
-  string device_model_code = 4; // e.g., "AM308", "ZC2X-01"
-  int64  vendor_id = 5;
-  uint32 parser_id = 6; // Binary parser ID for ingest engine
-  
-  // Ingest routing configuration (resolved from ingest_registry tables)
-  IngestRouting ingest_routing = 7;
+  uint64 device_key        = 1;
+  int64  organization_id   = 2;
+  int64  team_id           = 3;
+  string device_id         = 4; // UUID from devices table
+  string device_model_code = 5;
+  int64  vendor_id         = 6;
+  uint32 parser_id         = 7; // Binary parser id
+
+  DeviceTags               tags         = 8;
+  repeated SensorCalibration calibrations = 9;
 }
 
-// IngestRouting tells the ingest engine exactly WHERE and HOW to write.
-// Resolved from ingest_registry + ingest_*_config tables at the transport layer.
-// All fields are pre-resolved — ingest engine just follows instructions.
-message IngestRouting {
-  // InfluxDB target
-  int64  influxdb_config_id = 1; // FK to ingest_influxdb_config
-  bool   write_to_influxdb = 2;
-  bool   require_influxdb_ack = 3; // true = wait for write confirmation
-  string influxdb_host = 4; // Pre-resolved host:port
-  string influxdb_token = 5; // Pre-resolved auth token
-  string influxdb_bucket = 6; // Pre-resolved bucket name
-  string influxdb_measurement = 7; // Pre-resolved measurement name
-  
-  // Redis target
-  int64  redis_config_id = 8; // FK to ingest_redis_config
-  bool   write_to_redis = 9;
-  int32  redis_max_hash_entries = 10; // Last N readings per device
-  string redis_host = 11; // Pre-resolved host:port
-  string redis_key_prefix = 12; // Pre-resolved key prefix
-  
-  // NATS target
-  int64  nats_config_id = 13; // FK to ingest_nats_config
-  bool   write_to_nats = 14;
-  string nats_url = 15; // Pre-resolved NATS URL
-  string nats_subject_prefix = 16; // Pre-resolved subject prefix
+// ─── IngestEnvelope — top-level JetStream message ────────────────────────────
+//
+//  Published to data.{orgId}.{teamId}.{deviceKey}.raw    (PayloadType=PAYLOAD_RAW)
+//          or   data.{orgId}.{teamId}.{deviceKey}.decoded (PayloadType=PAYLOAD_DECODED)
+//
+// All output services subscribe to data.{orgId}.>.decoded (or data.> for global
+// services).  The raw subject is consumed primarily by audit-log services
+// (InfluxDB3 / ClickHouse), but any output service may also subscribe to it.
+
+message IngestEnvelope {
+  string                    event_id  = 1; // ULID — idempotency key
+  google.protobuf.Timestamp ts        = 2; // Event timestamp (device time when available)
+  google.protobuf.Timestamp ingest_ts = 3; // Wall-clock time at transport layer
+  IngestSource              source    = 4;
+  PayloadType               type      = 5;
+  uint64                    device_key = 6;
+
+  DeviceContext context = 7;
+
+  oneof payload {
+    RawPayload     raw     = 8;
+    DecodedPayload decoded = 9;
+  }
 }
 
-// IngestBatchRequest allows sending multiple messages in a single gRPC call.
-// Used by transport workers that accumulate batches before forwarding.
-message IngestBatchRequest {
-  repeated IngestRequest requests = 1;
+// ─── RawPayload ───────────────────────────────────────────────────────────────
+// Audit log: one record per incoming device message, pre-parse.
+
+message RawPayload {
+  bytes  data         = 1; // Raw bytes as received
+  string source_topic = 2; // MQTT topic / HTTP path / gRPC method
+  int64  service_id   = 3; // Input service (services.id)
+  string gateway_eui  = 4; // LoRaWAN gateway EUI (optional)
+  int32  rssi         = 5; // Signal strength dBm (optional)
+  float  snr          = 6; // Signal-to-noise ratio dB (optional)
+}
+
+// ─── DecodedPayload ───────────────────────────────────────────────────────────
+// Parsed + enriched output for all consumers.
+//
+// InfluxDB3 sensor_data measurement layout:
+//   tags:   org_id, team_id, device_key, model_code, vendor_id,
+//           location_name, asset_id, category, <extra_tags>, sensor_type
+//   fields: value_float | value_int | value_bool, value_type, scale, offset,
+//           calibrated_value, unit
+//   time:   ts
+//
+// InfluxDB3 sensor_calibration measurement layout (snapshot at write time):
+//   tags:   org_id, team_id, device_key, sensor_type
+//   fields: scale, offset, unit
+
+message SensorField {
+  string    sensor_type     = 1; // e.g. "a_plus", "p_total", "temperature"
+  ValueType value_type      = 2; // discriminator for query / UI
+
+  // Exactly one is populated (matching value_type)
+  double    value_float     = 3;
+  int64     value_int       = 4;
+  bool      value_bool      = 5;
+
+  // Calibration snapshot at time of write
+  double    scale           = 6; // default 1.0
+  double    offset          = 7; // default 0.0
+  // Pre-computed: calibrated = value_float * scale + offset
+  double    calibrated_value = 8;
+
+  string    unit            = 9;
+}
+
+message DecodedPayload {
+  // InfluxDB3 measurement name (default: "sensor_data")
+  string measurement = 1;
+
+  // Identity tags (written as InfluxDB tags)
+  string org_id     = 2;
+  string team_id    = 3;
+  string device_key = 4;
+  string model_code = 5;
+  string vendor_id  = 6;
+
+  // Location tags
+  double latitude      = 7;
+  double longitude     = 8;
+  double altitude_m    = 9;
+  string location_name = 10;
+
+  // Asset tags
+  string asset_id  = 11;
+  string category  = 12;
+
+  // Custom extra tags
+  map<string, string> extra_tags = 13;
+
+  // Sensor readings — one per sensor type in this message
+  repeated SensorField fields = 14;
+
+  // Input service that produced this decoded payload
+  int64 service_id = 15;
+}
+
+// ─── ServiceEvent — heartbeat / raw-ingest / output-ack ──────────────────────
+//
+// Published to: svc.{orgId}.{svcId}
+// All event types share this message; event_type discriminates.
+
+message ServiceEvent {
+  ServiceEventType          event_type    = 1;
+  int64                     service_id    = 2;
+  string                    service_type  = 3; // e.g. "input.mqtt"
+  int64                     org_id        = 4;
+  int64                     team_id       = 5;
+  string                    team_name     = 6;
+  google.protobuf.Timestamp reported_at   = 7;
+
+  // SVC_HEARTBEAT / SVC_TOMBSTONE fields
+  bool    is_connected  = 8;
+  bool    is_running    = 9;
+  int64   message_count = 10;
+  int64   error_count   = 11;
+  google.protobuf.Timestamp last_message_at = 12;
+  string  broker        = 13; // MQTT broker / InfluxDB host / gRPC endpoint
+  repeated string topics = 14; // MQTT subscribed topics
+
+  // SVC_RAW_INGEST fields (input adapters only)
+  uint64 device_key     = 15;
+  string source_topic   = 16;
+  bytes  payload_preview = 17; // First 64 bytes
+  int32  payload_size   = 18;
+
+  // SVC_OUTPUT_ACK fields (output adapters only)
+  int32  records_written = 19;
+  string target          = 20; // InfluxDB bucket / MQTT topic / HTTP endpoint
+}
+
+// ─── Command messages ─────────────────────────────────────────────────────────
+//
+// Published to: cmd.{orgId}.{teamId}.{deviceKey}
+
+message CommandEnvelope {
+  string command_id    = 1;
+  string device_id     = 2; // UUID
+  uint64 device_key    = 3;
+  string dev_eui       = 4; // LoRaWAN EUI (optional)
+
+  string command_type  = 5; // "downlink_raw" | "reboot" | "set_config"
+  bytes  payload       = 6; // JSON-encoded command data
+
+  // Transport routing (pre-resolved — no DB lookup on dispatch path)
+  string transport_type       = 7; // "mqtt" | "http" | "grpc"
+  string lns_provider_code    = 8;
+  string formatter_code       = 9;
+
+  // MQTT
+  string mqtt_host      = 10;
+  int32  mqtt_port      = 11;
+  string mqtt_username  = 12;
+  string mqtt_password  = 13;
+  int32  mqtt_qos       = 14;
+  bool   mqtt_use_tls   = 15;
+
+  // HTTP
+  string http_base_url         = 16;
+  string http_method           = 17;
+  string http_auth_type        = 18;
+  string http_auth_credentials = 19;
+  int32  http_timeout_sec      = 20;
+  string http_content_type     = 21;
+
+  // gRPC
+  string grpc_host         = 22;
+  int32  grpc_port         = 23;
+  string grpc_service_name = 24;
+
+  // Context
+  int64  organization_id   = 25;
+  int64  team_id           = 26;
+  string device_model_code = 27;
+  string vendor_code       = 28;
+  bytes  device_metadata   = 29; // JSON
+
+  // Timing
+  google.protobuf.Timestamp created_at  = 30;
+  google.protobuf.Timestamp expires_at  = 31;
+  int32  max_attempts = 32;
+  int32  attempt      = 33;
+}
+
+message CommandAck {
+  string                    command_id       = 1;
+  string                    device_id        = 2;
+  bool                      success          = 3;
+  string                    error            = 4;
+  google.protobuf.Timestamp acknowledged_at  = 5;
+}
+
+// ─── gRPC services ────────────────────────────────────────────────────────────
+
+// TelemetryIngestService — for direct gRPC input adapters.
+service TelemetryIngestService {
+  rpc IngestUnary(IngestEnvelope)         returns (IngestAck);
+  rpc IngestStream(stream IngestEnvelope) returns (stream IngestAck);
+  rpc IngestBatch(IngestBatchRequest)     returns (IngestBatchAck);
 }
 
 message IngestAck {
-  string                    event_id = 1;
-  IngestStatus              status      = 2;
-  google.protobuf.Timestamp ingest_time = 3; // server ingest time
-  string                    reason = 4;
+  string                    event_id    = 1;
+  google.protobuf.Timestamp ingest_time = 2;
+  bool                      accepted    = 3;
+  string                    reason      = 4; // non-empty on rejection
+}
+
+message IngestBatchRequest {
+  repeated IngestEnvelope envelopes = 1;
 }
 
 message IngestBatchAck {
-  repeated IngestAck acks = 1;
-  int32 accepted = 2; // count of accepted messages
-  int32 rejected = 3; // count of rejected messages
+  repeated IngestAck acks     = 1;
+  int32              accepted = 2;
+  int32              rejected = 3;
 }
 
-// PROTOBUF OVER NATS SUBJECT DESIGN
-message TelemetryEvent {
-  string                    event_id        = 1;
-  string                    organization_id = 2;
-  string                    device_id       = 3;
-  google.protobuf.Timestamp event_time       = 4; // optional
-  google.protobuf.Timestamp ingest_time       = 5; // optional
-    repeated SensorReading readings = 6;
-
-}
-
-message SensorReading {
-  string sensor_type = 1;
-  oneof value {
-    double value_float = 2;
-    int64  value_int   = 3;
-    bool   value_bool  = 4;
-  }
-  string unit = 5;
-}
-
-enum DeviceStatus {
-  UNKNOWN  = 0;
-  ONLINE   = 1;
-  OFFLINE  = 2;
-  DEGRADED = 3;
-}
-
-message DeviceStateEvent {
-  string       organization_id = 1;
-  string       device_id       = 2;
-  DeviceStatus status          = 3;
-  google.protobuf.Timestamp last_seen = 4;
-
-  string          firmware_version = 5;
-  map<string, string> metadata = 6;
-
-}
-
-// Embedded message for devices that support Protobuf
-message DeviceData {
-  uint64 timestamp = 1;
-
-  oneof data {
-    CAN can = 2;
-    IMU imu = 3;
-    GPS gps = 4;
-  }
-}
-
-message CAN {
-  uint32 id   = 1;
-  bytes  data = 2; // 8-byte CAN payload
-}
-
-message IMU {
-  float ax = 1; // acceleration
-  float ay = 2;
-  float az = 3;
-  float gx = 4; // gyroscope
-  float gy = 5;
-  float gz = 6;
-  float r  = 7; // euler orientation
-  float p  = 8;
-  float y  = 9;
-}
-
-message GPS {
-  double latitude  = 1;
-  double longitude = 2;
-  float  altitude  = 3;
-  float  speed     = 4;
-}
-
-message SendCommandRequest {
-  string                    device_id    = 1;
-  google.protobuf.Any       command_data = 2;
-  google.protobuf.Timestamp timestamp    = 3;
-}
-
-message SendCommandResponse {
-  bool   success    = 1;
-  string command_id = 2;
-  string error      = 3;
-}
-
-message AcknowledgeCommandRequest {
-  string                    command_id  = 1;
-  string                    device_id   = 2;
-  google.protobuf.Timestamp received_at = 3;
-}
-
-message AcknowledgeCommandResponse {
-  bool   success = 1;
-  string message = 2;
-}
-
-// Breakdown of the Example
-// The provided .proto file defines two gRPC services for sensor communication:
-// TelemetryService (data from sensors) and CommandService (data to sensors),
-// following protocol buffer best practices.//
-
-// TelemetryService
-// GetSensorData: Unary RPC to request sensor readings.
-// Request: GetSensorDataRequest (sensor ID and optional timestamp).
-// Response: GetSensorDataResponse (list of SensorReading and status).
-// StreamTelemetry: Server-streaming RPC for continuous telemetry.
-// Request: StreamTelemetryRequest (sensor ID).
-// Response: Stream of TelemetryData messages.
-// CommandService
-// SendCommand: Unary RPC to send a command to a sensor.
-// Request: SendCommandRequest (command type, parameters, target).
-// Response: SendCommandResponse (success flag, message, command ID).
-// AcknowledgeCommand: RPC to confirm command receipt.
-// Request: AcknowledgeCommandRequest (command ID).
-// Response: google.protobuf.Empty (no content).
-// Message Design
-// All messages use CamelCase.
-// Fields use lower_snake_case.
-// Reusable types like SensorReading and TelemetryData encapsulate structured
-// data. Using google.protobuf.Empty allows future expansion (e.g., adding
-// metadata)
-
-// ingest from lns-adapter
-// ============================================================================
-// LNS ADAPTER MESSAGE - PASSED TO INGEST SERVICE
-// ============================================================================
-// This protobuf message flows from the LoRaWAN Network Server (LNS) adapter
-// through the router to the ingest service. Telemetry tracing uses event_id
-// throughout the entire pipeline.
-
-message EventMetadata {
-  // Immutable tracing information set at LNS adapter layer
-  string event_id = 1; // ULID - unique per message (26 chars, base32)
-  int64 generated_at_ms = 2; // Adapter generation timestamp (milliseconds)
-  string source_adapter = 3; // "lns" for LoRaWAN Network Server / ChirpStack
-  int64 tenant_id = 4; // Multi-tenant isolation
-}
-
-message DeviceIdentification {
-  // DevEUI and DevAddr are from provider, immutable
-  string dev_eui = 1; // LoRaWAN Device EUI (16 hex chars)
-  string dev_addr = 2; // LoRaWAN Device Address (8 hex chars)
-  
-  // device_id discovery results (optional, may be missing if cache miss)
-  // Note: device_key for routing is now at top-level IngestRequest.device_key
-  // This device_id is for: tracing, adapter-specific logic, identification
-  string device_id = 3; // UUID from device_registry (for tracing/identification)
-  int64 vendor_id = 4; // Device vendor ID
-  int64 parser_id = 5; // Which parser to use for device payload
-}
-
-message SignalQuality {
-  int32 rssi = 1; // Signal strength in dBm (-120 to 0)
-  float snr = 2; // Signal-to-noise ratio (dB)
-}
-
-message PhysicalLayer {
-  int32 data_rate = 1; // Data rate (0-15)
-  int32 spreading_factor = 2; // Spreading factor (7-12)
-  int32 bandwidth_khz = 3; // Bandwidth in kHz (typically 125, 250, 500)
-  float frequency_mhz = 4; // Frequency in MHz (e.g., 868.1)
-}
-
-message LoRaWANFrame {
-  int32 port = 1; // LoRaWAN port (0-223)
-  int32 frame_counter = 2; // Frame counter for replay detection
-  bool confirmed = 3; // ACK requested by device
-  bytes payload = 4; // Raw device payload
-  int64 timestamp_ms = 5; // When message was received
-}
-
-message GatewayInfo {
-  string gateway_id = 1; // Gateway identifier
-  float latitude = 2; // GPS latitude (optional)
-  float longitude = 3; // GPS longitude (optional)
-  float altitude = 4; // GPS altitude (optional)
-}
-
-message SecurityContext {
-  // Correlation ID for request tracing
-  string context_id = 1; // Correlation ID
-  // Device tags for filtering/routing decisions
-  repeated string tags = 2; // Device tags (e.g., "production", "test")
-}
-
-// Main message
-message LNSAdapterMessage {
-  // === LAYER 1: TELEMETRY (from adapter, immutable) ===
-  EventMetadata event = 1;
-  
-  // === LAYER 2: DEVICE IDENTIFICATION ===
-  DeviceIdentification identification = 2;
-  
-  // === LAYER 3: PAYLOAD AND METADATA ===
-  LoRaWANFrame frame = 3;
-  SignalQuality signal = 4;
-  PhysicalLayer physical = 5;
-  GatewayInfo gateway = 6;
-  
-  // === LAYER 4: SECURITY/TRACING ===
-  SecurityContext security = 7;
-  
-  // === LAYER 5: PARSED FIELDS (NEW - adapter-side parsing) ===
-  repeated ParsedField parsed_fields = 8; // Pre-parsed from payload
-  
-  // === FUTURE USE ===
-  map<string, string> custom_fields = 9; // Provider-specific extensions
-}
-
-// Batch for efficiency
-message BatchLNSMessages {
-  repeated LNSAdapterMessage messages = 1;
-  int64 batch_id_ms = 2; // Batch timestamp for grouping
-}
-
-// ============================================================================
-// MQTT ADAPTER MESSAGE - ALTERNATIVE INGEST PATH FOR MQTT GATEWAY
-// ============================================================================
-// MQTT gateway receives messages from arbitrary MQTT topics and forwards
-// to ingest service. Much simpler than LoRaWAN - just topic, QoS, and payload.
-
-message MQTTEventMetadata {
-  // Immutable tracing information set at MQTT gateway layer
-  string event_id = 1; // ULID - unique per message (26 chars, base32)
-  int64 generated_at_ms = 2; // Gateway generation timestamp (milliseconds)
-  string source_adapter = 3; // "mqtt" for generic MQTT gateway
-  int64 tenant_id = 4; // Multi-tenant isolation
-}
-
-message MQTTClientInfo {
-  // MQTT connection details
-  string client_id = 1; // MQTT client identifier (optional)
-  string topic = 2; // MQTT topic message was published to
-  int32 qos = 3; // Quality of Service (0, 1, or 2)
-  bool retain = 4; // Message was retained by broker
-  string broker_url = 5; // Broker connection string (optional, for routing)
-}
-
-message MQTTDeviceIdentification {
-  // Device identification from MQTT topic or payload
-  // Examples: devices/{device_id}/telemetry or devices/{device_id}/status
-  string device_id = 1; // UUID from device_registry (if known)
-  string topic_device_id = 2; // Device ID extracted from MQTT topic (if different)
-  string device_name = 3; // Human-readable device name (optional)
-  map<string, string> device_tags = 4; // Device metadata tags
-}
-
-message MQTTGatewayMessage {
-  // === LAYER 1: TELEMETRY (from adapter, immutable) ===
-  MQTTEventMetadata event = 1;
-  
-  // === LAYER 2: DEVICE IDENTIFICATION ===
-  MQTTDeviceIdentification device = 2;
-  
-  // === LAYER 3: MQTT CONTEXT ===
-  MQTTClientInfo mqtt = 3;
-  
-  // === LAYER 4: PAYLOAD ===
-  bytes payload = 4; // Raw MQTT message payload
-  
-  // === LAYER 5: PARSED FIELDS (NEW) ===
-  repeated ParsedField parsed_fields = 5; // Pre-parsed from payload
-  
-  // === LAYER 6: SECURITY/TRACING ===
-  SecurityContext security = 6;
-  
-  // === FUTURE USE ===
-  map<string, string> custom_fields = 7; // Provider-specific extensions
-}
-
-// Batch for efficiency
-message BatchMQTTMessages {
-  repeated MQTTGatewayMessage messages = 1;
-  int64 batch_id_ms = 2; // Batch timestamp for grouping
-}
-
-// ============================================================================
-// ZC2X ADAPTER MESSAGE - FOR ZC2X PROTOCOL DEVICES
-// ============================================================================
-
-message Zc2xAdapterMessage {
-  // === LAYER 1: TELEMETRY (from adapter, immutable) ===
-  string event_id = 1;
-  int64 generated_at_ms = 2; // Adapter generation timestamp
-  string source_adapter = 3; // "zc2x" for ZC2x protocol
-  int64 tenant_id = 4;
-  
-  // === LAYER 2: DEVICE IDENTIFICATION ===
-  string device_id = 5; // UUID from device_registry
-  string device_name = 6; // Human-readable device name
-  
-  // === LAYER 3: DEVICE CONTEXT ===
-  int64 vendor_id = 7; // Device vendor ID
-  
-  // === LAYER 4: PAYLOAD & PARSED FIELDS ===
-  bytes raw_payload = 8; // Raw binary (for debugging/fallback)
-  repeated ParsedField parsed_fields = 9; // Pre-parsed fields
-  
-  // === LAYER 5: METADATA ===
-  int64 timestamp_ms = 10; // Message timestamp
-  string signal_strength = 11; // Signal quality
-  
-  // === LAYER 6: SECURITY/TRACING ===
-  string context_id = 12; // Correlation ID
-  repeated string tags = 13; // Device tags
-  
-  // === FUTURE USE ===
-  map<string, string> custom_fields = 14;
-}
-
-// ============================================================================
-// AGENT ADAPTER MESSAGE - FOR AGENT GATEWAYS
-// ============================================================================
-
-message AgentAdapterMessage {
-  // === LAYER 1: TELEMETRY (from adapter, immutable) ===
-  string event_id = 1;
-  int64 generated_at_ms = 2; // Adapter generation timestamp
-  string source_adapter = 3; // "agent" for agent gateway
-  int64 tenant_id = 4;
-  
-  // === LAYER 2: DEVICE IDENTIFICATION ===
-  string device_id = 5;
-  string device_name = 6;
-  
-  // === LAYER 3: AGENT CONTEXT ===
-  string agent_id = 7; // Which agent sent this
-  string gateway_id = 8; // Gateway identifier
-  
-  // === LAYER 4: PAYLOAD & PARSED FIELDS ===
-  bytes raw_payload = 9; // Raw binary (for debugging/fallback)
-  repeated ParsedField parsed_fields = 10; // Pre-parsed fields
-  
-  // === LAYER 5: METADATA ===
-  int64 timestamp_ms = 11;
-  string location = 12; // GPS or logical location
-  
-  // === LAYER 6: SECURITY/TRACING ===
-  string context_id = 13;
-  repeated string tags = 14;
-  
-  // === FUTURE USE ===
-  map<string, string> custom_fields = 15;
-}
-
-// ============================================================================
-// MONITORING (should be moved to separate proto for metrics/health)
-// ============================================================================
-
-// Health check response
-message AdapterHealthStatus {
-  bool is_healthy = 1;
-  int64 last_message_ms = 2;
-  int64 message_count = 3;
-  int64 error_count = 4;
-  map<string, string> details = 5;
-}
-
-// Cache stats for monitoring (track via metrics service, not message)
-message CacheStats {
-  int64 total_messages = 1;
-  int64 cache_hits = 2;
-  int64 cache_misses = 3;
-  float cache_hit_rate = 4; // 0.0-100.0
-  int64 avg_lookup_latency_ms = 5;
+// CommandService — bidirectional between API and command dispatch workers.
+service CommandService {
+  rpc SendCommand(CommandEnvelope)                         returns (CommandAck);
+  rpc CommandStream(stream CommandEnvelope) returns (stream CommandAck);
 }
